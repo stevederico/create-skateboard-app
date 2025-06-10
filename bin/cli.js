@@ -105,26 +105,52 @@ function ask(question, defaultValue = '') {
 
 function askChoice(question, choices, defaultChoice = 0) {
   return new Promise((resolve) => {
-    log(`\n${colors.cyan}${question}${colors.reset}`);
-    choices.forEach((choice, index) => {
-      const marker = index === defaultChoice ? '●' : '○';
-      const color = index === defaultChoice ? 'green' : 'reset';
-      log(`  ${colors[color]}${marker} ${choice.label}${colors.reset}`);
-    });
+    let currentChoice = defaultChoice;
     
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
+    const displayMenu = () => {
+      // Clear screen and show menu
+      console.clear();
+      log(`\n${colors.cyan}${question}${colors.reset}\n`);
+      choices.forEach((choice, index) => {
+        const marker = index === currentChoice ? '●' : '○';
+        const color = index === currentChoice ? 'green' : 'reset';
+        const highlight = index === currentChoice ? colors.bold : '';
+        log(`  ${colors[color]}${highlight}${marker} ${choice.label}${colors.reset}`);
+      });
+      log(`\n${colors.yellow}Use ↑/↓ arrows to navigate, Enter to select${colors.reset}`);
+    };
 
-    const prompt = `${colors.yellow}Select (1-${choices.length}, default ${defaultChoice + 1})${colors.reset}: `;
-    
-    rl.question(prompt, (answer) => {
-      rl.close();
-      const choice = parseInt(answer) - 1;
-      const selected = (choice >= 0 && choice < choices.length) ? choice : defaultChoice;
-      resolve(choices[selected]);
-    });
+    displayMenu();
+
+    // Enable raw mode to capture arrow keys
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
+    const handleKeypress = (key) => {
+      switch (key) {
+        case '\u001b[A': // Up arrow
+          currentChoice = currentChoice > 0 ? currentChoice - 1 : choices.length - 1;
+          displayMenu();
+          break;
+        case '\u001b[B': // Down arrow
+          currentChoice = currentChoice < choices.length - 1 ? currentChoice + 1 : 0;
+          displayMenu();
+          break;
+        case '\r': // Enter
+        case '\n':
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.removeListener('data', handleKeypress);
+          resolve(choices[currentChoice]);
+          break;
+        case '\u0003': // Ctrl+C
+          process.exit(0);
+          break;
+      }
+    };
+
+    process.stdin.on('data', handleKeypress);
   });
 }
 
@@ -144,6 +170,20 @@ async function collectProjectConfig(projectName) {
 
   // Tagline
   const tagline = await ask('App tagline', 'Try Something New');
+
+  // App color selection
+  const colorChoices = [
+    { label: '🔵 Blue', value: 'blue' },
+    { label: '💚 Green', value: 'green' },
+    { label: '🟣 Purple', value: 'purple' },
+    { label: '🔴 Red', value: 'red' },
+    { label: '🟠 Orange', value: 'orange' },
+    { label: '🟡 Yellow', value: 'yellow' },
+    { label: '🩷 Pink', value: 'pink' },
+    { label: '🩵 Cyan', value: 'cyan' }
+  ];
+  
+  const selectedColor = await askChoice('Choose your app color:', colorChoices);
 
   // App icon
   const iconChoices = [
@@ -193,13 +233,18 @@ async function collectProjectConfig(projectName) {
     }
   }
 
+  // Company name (after pages configuration)
+  const companyName = await ask('Company name', 'Your Company');
+
   // Installation preferences
   const installDeps = await askYesNo('Install dependencies automatically?', true);
   const initGit = await askYesNo('Initialize git repository?', true);
 
   return {
+    companyName,
     appName,
     tagline,
+    appColor: selectedColor.value,
     appIcon: selectedIcon.value,
     backendURL,
     devBackendURL,
@@ -249,6 +294,7 @@ async function main() {
     const constantsPath = join(projectName, 'src', 'constants.json');
     if (existsSync(constantsPath)) {
       const constants = JSON.parse(readFileSync(constantsPath, 'utf8'));
+      constants.companyName = config.companyName;
       constants.appName = config.appName;
       constants.tagline = config.tagline;
       constants.appIcon = config.appIcon;
@@ -259,14 +305,28 @@ async function main() {
       success('App configuration updated');
     }
 
-    // Step 5: Install dependencies (if requested)
+    // Step 5: Update app color in styles.css
+    info('Setting app color...');
+    const stylesPath = join(projectName, 'src', 'assets', 'styles.css');
+    if (existsSync(stylesPath)) {
+      let stylesContent = readFileSync(stylesPath, 'utf8');
+      // Replace the app color in the @theme block
+      stylesContent = stylesContent.replace(
+        /--color-app:\s*var\(--color-[^)]+\);/,
+        `--color-app: var(--color-${config.appColor}-500);`
+      );
+      writeFileSync(stylesPath, stylesContent);
+      success(`App color set to ${config.appColor}`);
+    }
+
+    // Step 6: Install dependencies (if requested)
     if (config.installDeps) {
       info('Installing dependencies...');
       execSync(`cd ${projectName} && npm install`, { stdio: 'inherit' });
       success('Dependencies installed');
     }
 
-    // Step 6: Initialize git (if requested)
+    // Step 7: Initialize git (if requested)
     if (config.initGit) {
       info('Initializing git repository...');
       execSync(`cd ${projectName} && git init`, { stdio: 'pipe' });
@@ -276,19 +336,25 @@ async function main() {
     // Success message
     log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
     
+    // Change to the new project directory
+    process.chdir(projectName);
+    info(`Switched to ${projectName} directory`);
+    
     log('Next steps:', 'yellow');
-    log(`  cd ${projectName}`);
     if (!config.installDeps) {
       log(`  npm install`);
     }
     log(`  npm run start`);
     log(`\n${colors.cyan}Your app is configured with:${colors.reset}`);
+    log(`  🏢 Company: ${config.companyName}`);
     log(`  📱 App: ${config.appName}`);
     log(`  💬 Tagline: ${config.tagline}`);
+    log(`  🎨 Color: ${config.appColor}`);
     log(`  🎯 Icon: ${config.appIcon}`);
     log(`  📄 Pages: ${config.pages.map(p => p.title).join(', ')}`);
     log(`  🌐 Backend: ${config.backendURL}`);
-    log(`\nHappy coding! 🛹\n`);
+    log(`\n${colors.magenta}You're now in the ${projectName} directory!${colors.reset}`);
+    log(`${colors.yellow}Run 'npm run start' to begin development 🛹${colors.reset}\n`);
 
   } catch (err) {
     error(`Failed to create project: ${err.message}`);
