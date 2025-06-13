@@ -344,7 +344,7 @@ async function main() {
     if (!config.installDeps) {
       log(`  npm install`);
     }
-    log(`  npm run start`);
+    log(`  npm run dev`);
     log(`\n${colors.cyan}Your app is configured with:${colors.reset}`);
     log(`  🏢 Company: ${config.companyName}`);
     log(`  📱 App: ${config.appName}`);
@@ -354,7 +354,7 @@ async function main() {
     log(`  📄 Pages: ${config.pages.map(p => p.title).join(', ')}`);
     log(`  🌐 Backend: ${config.backendURL}`);
     log(`\n${colors.magenta}You're now in the ${projectName} directory!${colors.reset}`);
-    log(`${colors.yellow}Run 'npm run start' to begin development 🛹${colors.reset}\n`);
+    log(`${colors.yellow}Run 'npm run dev' to begin development 🛹${colors.reset}\n`);
 
   } catch (err) {
     error(`Failed to create project: ${err.message}`);
