@@ -5,21 +5,21 @@ The fastest way to create a new [Skateboard](https://github.com/stevederico/skat
 ## Quick Start
 
 ```bash
-npx create-skateboard-app my-app
+npx create-skateboard-app
 cd my-app
-npm start
+npm run dev
 ```
 
 ## Usage
 
-### Interactive Mode
+### Interactive Mode (Default)
 ```bash
-npx create-skateboard-app my-app
+npx create-skateboard-app
 ```
 
-### Skip Prompts
+### With Project Name
 ```bash
-npx create-skateboard-app my-app --yes
+npx create-skateboard-app my-app
 ```
 
 ## What You Get
@@ -33,14 +33,13 @@ npx create-skateboard-app my-app --yes
 - 🌙 Dark mode support
 - 📱 Mobile responsive
 - 🛣️ React Router
-- 🎯 TypeScript ready
+- 📦 Modern JavaScript
 
 ## Features Included
 
 - Sign up/Sign in pages
 - Landing page
-- Dashboard with sidebar
-- Settings page
+- Settings page with Home and Other views
 - Legal pages (Privacy, Terms, EULA)
 - 404 error handling
 - Protected routes
@@ -49,8 +48,9 @@ npx create-skateboard-app my-app --yes
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.5+
 - npm or yarn
+- git, curl, or npx (for template download)
 
 ## Contributing
 

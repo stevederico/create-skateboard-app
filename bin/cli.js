@@ -35,11 +35,21 @@ function info(message) {
   log(`ℹ️  ${message}`, 'blue');
 }
 
+function checkCommand(command) {
+  try {
+    execSync(`which ${command}`, { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function downloadTemplate(projectName) {
   // Try multiple methods in order of preference
   const methods = [
     {
       name: 'degit',
+      check: () => checkCommand('npx'),
       execute: () => execSync(`npx degit stevederico/skateboard ${projectName}`, { 
         stdio: 'pipe',
         timeout: 30000
@@ -47,6 +57,7 @@ async function downloadTemplate(projectName) {
     },
     {
       name: 'git clone',
+      check: () => checkCommand('git'),
       execute: () => {
         execSync(`git clone --depth 1 https://github.com/stevederico/skateboard.git ${projectName}`, { 
           stdio: 'pipe',
@@ -58,6 +69,7 @@ async function downloadTemplate(projectName) {
     },
     {
       name: 'curl + unzip',
+      check: () => checkCommand('curl') && checkCommand('unzip'),
       execute: () => {
         execSync(`curl -L https://github.com/stevederico/skateboard/archive/refs/heads/master.zip -o temp.zip`, { 
           stdio: 'pipe',
@@ -71,6 +83,11 @@ async function downloadTemplate(projectName) {
   ];
 
   for (const method of methods) {
+    if (!method.check()) {
+      log(`${method.name} not available, skipping...`, 'yellow');
+      continue;
+    }
+    
     try {
       info(`Trying ${method.name}...`);
       method.execute();
@@ -81,7 +98,7 @@ async function downloadTemplate(projectName) {
     }
   }
 
-  throw new Error('All download methods failed. Please check your internet connection or try again later.');
+  throw new Error('All download methods failed. Please ensure you have git, curl, or npx available and check your internet connection.');
 }
 
 // Interactive prompt functions
@@ -207,11 +224,11 @@ async function collectProjectConfig(projectName) {
   log(`\n${colors.cyan}Configure your app pages:${colors.reset}`);
   const pages = [];
   
-  const addDefaultPages = await askYesNo('Add default pages (Home, Dashboard)?', true);
+  const addDefaultPages = await askYesNo('Add default pages (Home, Other)?', true);
   if (addDefaultPages) {
     pages.push(
       { title: 'Home', url: 'home', icon: 'house' },
-      { title: 'Dashboard', url: 'dashboard', icon: 'layout-dashboard' }
+      { title: 'Other', url: 'other', icon: 'inbox' }
     );
   }
 
@@ -254,13 +271,57 @@ async function collectProjectConfig(projectName) {
   };
 }
 
+function showHelp() {
+  log(`
+${colors.bold}🛹 Create Skateboard App${colors.reset}
+
+${colors.cyan}Usage:${colors.reset}
+  npx create-skateboard-app
+
+${colors.cyan}Arguments:${colors.reset}
+  project-name    Optional project directory name (will prompt if not provided)
+
+${colors.cyan}Options:${colors.reset}
+  --help, -h      Show this help message
+  --version, -v   Show version number
+
+${colors.cyan}Examples:${colors.reset}
+  npx create-skateboard-app                    # Interactive mode
+  npx create-skateboard-app my-app             # With project name
+  npx create-skateboard-app awesome-project    # With custom name
+`, 'reset');
+}
+
+function showVersion() {
+  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  log(`v${packageJson.version}`, 'green');
+}
+
 async function main() {
   // Get project name from command line
-  const projectName = process.argv[2];
+  const args = process.argv.slice(2);
+  let projectName = args[0];
 
+  // Handle help and version flags
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp();
+    process.exit(0);
+  }
+
+  if (args.includes('--version') || args.includes('-v')) {
+    showVersion();
+    process.exit(0);
+  }
+
+  // If no project name provided, ask for it
   if (!projectName) {
-    error('Please provide a project name');
-    log('Usage: npx create-skateboard-app my-project-name', 'yellow');
+    log(`\n${colors.bold}🛹 Welcome to Skateboard App Creator!${colors.reset}\n`);
+    projectName = await ask('What is the name of your project?', 'my-skateboard-app');
+  }
+
+  // Validate project name
+  if (!/^[a-zA-Z0-9-_]+$/.test(projectName)) {
+    error('Project name can only contain letters, numbers, hyphens, and underscores');
     process.exit(1);
   }
 
