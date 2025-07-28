@@ -7,7 +7,7 @@ The fastest way to create a new [Skateboard](https://github.com/stevederico/skat
 ```bash
 npx create-skateboard-app
 cd my-app
-npm run dev
+npm run start
 ```
 
 ## Usage
