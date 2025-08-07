@@ -1,6 +1,6 @@
 {
   "name": "create-skateboard-app",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Create a new Skateboard app with React, TailwindCSS, and more",
   "main": "index.js",
   "type": "module",

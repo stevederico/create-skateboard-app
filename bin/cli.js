@@ -187,7 +187,7 @@ async function collectProjectConfig(projectName) {
   log(`\n${colors.bold}Let's configure your Skateboard app!${colors.reset}\n`);
 
   // App name
-  const appName = await ask('App name', projectName.split('-').map(word => 
+  const appName = await ask('App display name', projectName.split('-').map(word => 
     word.charAt(0).toUpperCase() + word.slice(1)
   ).join(' '));
 
@@ -294,7 +294,7 @@ async function main() {
   // If no project name provided, ask for it
   if (!projectName) {
     log(`\n${colors.bold}🛹 Welcome to Skateboard App Creator!${colors.reset}\n`);
-    projectName = await ask('What is the name of your project?', 'my-skateboard-app');
+    projectName = await ask('Project directory name', 'my-skateboard-app');
   }
 
   // Validate project name
