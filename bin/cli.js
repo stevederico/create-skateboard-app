@@ -48,23 +48,28 @@ async function downloadTemplate(projectName) {
   // Try multiple methods in order of preference
   const methods = [
     {
-      name: 'degit',
-      check: () => checkCommand('npx'),
-      execute: () => execSync(`npx degit stevederico/skateboard ${projectName}`, { 
-        stdio: 'pipe',
-        timeout: 30000
-      })
-    },
-    {
       name: 'git clone',
       check: () => checkCommand('git'),
       execute: () => {
-        execSync(`git clone --depth 1 https://github.com/stevederico/skateboard.git ${projectName}`, { 
+        execSync(`git clone --depth 1 --single-branch https://github.com/stevederico/skateboard.git ${projectName}`, { 
           stdio: 'pipe',
-          timeout: 30000
+          timeout: 15000
         });
         // Remove .git directory to avoid including git history
         execSync(`rm -rf ${projectName}/.git`, { stdio: 'pipe' });
+      }
+    },
+    {
+      name: 'curl + tar',
+      check: () => checkCommand('curl') && checkCommand('tar'),
+      execute: () => {
+        // Download and extract in one step, avoiding the skateboard-master folder issue
+        execSync(`curl -L https://github.com/stevederico/skateboard/archive/refs/heads/master.tar.gz | tar -xz`, { 
+          stdio: 'pipe',
+          timeout: 15000
+        });
+        // Move contents from skateboard-master to the project directory
+        execSync(`mv skateboard-master ${projectName}`, { stdio: 'pipe' });
       }
     },
     {
@@ -73,9 +78,10 @@ async function downloadTemplate(projectName) {
       execute: () => {
         execSync(`curl -L https://github.com/stevederico/skateboard/archive/refs/heads/master.zip -o temp.zip`, { 
           stdio: 'pipe',
-          timeout: 30000
+          timeout: 15000
         });
         execSync(`unzip -q temp.zip`, { stdio: 'pipe' });
+        // Move the extracted skateboard-master folder to the project name
         execSync(`mv skateboard-master ${projectName}`, { stdio: 'pipe' });
         execSync(`rm temp.zip`, { stdio: 'pipe' });
       }
@@ -89,16 +95,16 @@ async function downloadTemplate(projectName) {
     }
     
     try {
-      info(`Trying ${method.name}...`);
+      info(`Downloading template with ${method.name}...`);
       method.execute();
-      success(`Template downloaded via ${method.name}`);
+      success(`Template downloaded successfully`);
       return;
     } catch (err) {
       log(`${method.name} failed, trying next method...`, 'yellow');
     }
   }
 
-  throw new Error('All download methods failed. Please ensure you have git, curl, or npx available and check your internet connection.');
+  throw new Error('All download methods failed. Please ensure you have git or curl available and check your internet connection.');
 }
 
 // Interactive prompt functions
@@ -216,42 +222,14 @@ async function collectProjectConfig(projectName) {
   
   const selectedIcon = await askChoice('Choose an app icon:', iconChoices);
 
-  // Backend URLs
-  const backendURL = await ask('Production backend URL', 'https://api.example.com');
-  const devBackendURL = await ask('Development backend URL', 'http://localhost:8000');
-
-  // App pages configuration
-  log(`\n${colors.cyan}Configure your app pages:${colors.reset}`);
-  const pages = [];
-  
-  const addDefaultPages = await askYesNo('Add default pages (Home, Other)?', true);
-  if (addDefaultPages) {
-    pages.push(
-      { title: 'Home', url: 'home', icon: 'house' },
-      { title: 'Other', url: 'other', icon: 'inbox' }
-    );
-  }
-
-  const addMorePages = await askYesNo('Add more custom pages?', false);
-  if (addMorePages) {
-    let addAnother = true;
-    while (addAnother) {
-      const pageTitle = await ask('Page title');
-      const pageUrl = await ask('Page URL', pageTitle.toLowerCase().replace(/\s+/g, '-'));
-      const pageIcon = await ask('Page icon (lucide icon name)', 'circle');
-      
-      pages.push({
-        title: pageTitle,
-        url: pageUrl,
-        icon: pageIcon
-      });
-
-      addAnother = await askYesNo('Add another page?', false);
-    }
-  }
-
-  // Company name (after pages configuration)
-  const companyName = await ask('Company name', 'Your Company');
+  // Default values for removed questions
+  const backendURL = 'https://api.example.com';
+  const devBackendURL = 'http://localhost:8000';
+  const companyName = 'Your Company';
+  const pages = [
+    { title: 'Home', url: 'home', icon: 'house' },
+    { title: 'Other', url: 'other', icon: 'inbox' }
+  ];
 
   // Installation preferences
   const installDeps = await askYesNo('Install dependencies automatically?', true);
@@ -397,25 +375,19 @@ async function main() {
     // Success message
     log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
     
-    // Change to the new project directory
-    process.chdir(projectName);
-    info(`Switched to ${projectName} directory`);
-    
-    log('Next steps:', 'yellow');
-    if (!config.installDeps) {
-      log(`  npm install`);
-    }
-    log(`  npm run dev`);
     log(`\n${colors.cyan}Your app is configured with:${colors.reset}`);
-    log(`  🏢 Company: ${config.companyName}`);
     log(`  📱 App: ${config.appName}`);
     log(`  💬 Tagline: ${config.tagline}`);
     log(`  🎨 Color: ${config.appColor}`);
     log(`  🎯 Icon: ${config.appIcon}`);
-    log(`  📄 Pages: ${config.pages.map(p => p.title).join(', ')}`);
-    log(`  🌐 Backend: ${config.backendURL}`);
-    log(`\n${colors.magenta}You're now in the ${projectName} directory!${colors.reset}`);
-    log(`${colors.yellow}Run 'npm run dev' to begin development 🛹${colors.reset}\n`);
+    
+    log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
+    log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
+    if (!config.installDeps) {
+      log(`  ${colors.cyan}npm install${colors.reset}`);
+    }
+    log(`  ${colors.cyan}npm run start${colors.reset}`);
+    log(`\n${colors.yellow}Happy coding! 🛹${colors.reset}\n`);
 
   } catch (err) {
     error(`Failed to create project: ${err.message}`);
