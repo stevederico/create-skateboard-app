@@ -368,25 +368,45 @@ async function main() {
     const backendConfigPath = join(projectName, 'backend', 'config.json');
     if (existsSync(backendConfigPath)) {
       const backendConfig = JSON.parse(readFileSync(backendConfigPath, 'utf8'));
-      // Handle both array and single object formats defensively
-      const configArray = Array.isArray(backendConfig) ? backendConfig : [backendConfig];
       
-      configArray.forEach(configObj => {
-        configObj.dbType = config.database.value;
+      // Handle new format with databases array
+      if (backendConfig.databases && Array.isArray(backendConfig.databases) && backendConfig.databases.length > 0) {
+        const dbConfig = backendConfig.databases[0];
+        
+        // Set database configuration
+        dbConfig.dbType = config.database.value;
+        dbConfig.db = config.appName.replace(/\s+/g, '');
+        dbConfig.origin = config.devBackendURL;
+        
         if (config.database.value === 'sqlite') {
-          configObj.connectionString = config.database.connectionString;
+          dbConfig.connectionString = config.database.connectionString;
         } else if (config.database.value === 'postgresql') {
-          // Always use environment variable placeholder in config.json
-          configObj.connectionString = '${POSTGRES_URL}';
+          dbConfig.connectionString = '${POSTGRES_URL}';
         } else if (config.database.value === 'mongodb') {
-          // Always use environment variable placeholder in config.json  
-          configObj.connectionString = '${MONGODB_URL}';
+          dbConfig.connectionString = '${MONGODB_URL}';
         }
-      });
+      } else {
+        // Fallback for old format - handle both array and single object formats defensively
+        const configArray = Array.isArray(backendConfig) ? backendConfig : [backendConfig];
+        
+        configArray.forEach(configObj => {
+          configObj.dbType = config.database.value;
+          if (config.database.value === 'sqlite') {
+            configObj.connectionString = config.database.connectionString;
+          } else if (config.database.value === 'postgresql') {
+            configObj.connectionString = '${POSTGRES_URL}';
+          } else if (config.database.value === 'mongodb') {
+            configObj.connectionString = '${MONGODB_URL}';
+          }
+        });
+        
+        // Update backendConfig reference for old format
+        if (!Array.isArray(backendConfig)) {
+          Object.assign(backendConfig, configArray[0]);
+        }
+      }
       
-      // Write back the original format (array or single object)
-      const finalConfig = Array.isArray(backendConfig) ? configArray : configArray[0];
-      writeFileSync(backendConfigPath, JSON.stringify(finalConfig, null, 2));
+      writeFileSync(backendConfigPath, JSON.stringify(backendConfig, null, 2));
       success(`Database configured: ${config.database.value}`);
     }
 

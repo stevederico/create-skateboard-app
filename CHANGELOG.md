@@ -1,4 +1,10 @@
 
+1.0.6
+
+  Update config format
+  Support databases array
+  Add backward compatibility
+
 1.0.5
 
   Remove env setup references
