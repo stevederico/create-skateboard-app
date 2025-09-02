@@ -222,6 +222,23 @@ async function collectProjectConfig(projectName) {
   
   const selectedIcon = await askChoice('Choose an app icon:', iconChoices);
 
+  // Database selection
+  const databaseChoices = [
+    { label: '🗃️  SQLite (default)', value: 'sqlite', connectionString: `./databases/${appName.replace(/\s+/g, '')}.db` },
+    { label: '🐘 PostgreSQL', value: 'postgresql', connectionString: 'postgresql://user:password@localhost:5432/dbname' },
+    { label: '🍃 MongoDB', value: 'mongodb', connectionString: 'mongodb://localhost:27017/dbname' }
+  ];
+  
+  const selectedDatabase = await askChoice('Choose your database:', databaseChoices, 0);
+
+  // Get connection string for non-SQLite databases
+  let connectionString = '';
+  if (selectedDatabase.value === 'postgresql') {
+    connectionString = await ask('PostgreSQL connection string (optional)', '');
+  } else if (selectedDatabase.value === 'mongodb') {
+    connectionString = await ask('MongoDB connection string (optional)', '');
+  }
+
   // Default values for removed questions
   const backendURL = 'https://api.example.com';
   const devBackendURL = 'http://localhost:8000';
@@ -232,7 +249,7 @@ async function collectProjectConfig(projectName) {
   ];
 
   // Installation preferences
-  const installDeps = await askYesNo('Install dependencies automatically?', true);
+  const installDeps = true; // Always install dependencies
   const initGit = await askYesNo('Initialize git repository?', true);
 
   return {
@@ -241,6 +258,8 @@ async function collectProjectConfig(projectName) {
     tagline,
     appColor: selectedColor.value,
     appIcon: selectedIcon.value,
+    database: selectedDatabase,
+    connectionString,
     backendURL,
     devBackendURL,
     pages,
@@ -344,7 +363,51 @@ async function main() {
       success('App configuration updated');
     }
 
-    // Step 5: Update app color in styles.css
+    // Step 5: Configure database settings
+    info('Configuring database...');
+    const backendConfigPath = join(projectName, 'backend', 'config.json');
+    if (existsSync(backendConfigPath)) {
+      const backendConfig = JSON.parse(readFileSync(backendConfigPath, 'utf8'));
+      // Handle both array and single object formats defensively
+      const configArray = Array.isArray(backendConfig) ? backendConfig : [backendConfig];
+      
+      configArray.forEach(configObj => {
+        configObj.dbType = config.database.value;
+        if (config.database.value === 'sqlite') {
+          configObj.connectionString = config.database.connectionString;
+        } else if (config.database.value === 'postgresql') {
+          // Always use environment variable placeholder in config.json
+          configObj.connectionString = '${POSTGRES_URL}';
+        } else if (config.database.value === 'mongodb') {
+          // Always use environment variable placeholder in config.json  
+          configObj.connectionString = '${MONGODB_URL}';
+        }
+      });
+      
+      // Write back the original format (array or single object)
+      const finalConfig = Array.isArray(backendConfig) ? configArray : configArray[0];
+      writeFileSync(backendConfigPath, JSON.stringify(finalConfig, null, 2));
+      success(`Database configured: ${config.database.value}`);
+    }
+
+    // Create .env file if connection string provided
+    if (config.connectionString && (config.database.value === 'postgresql' || config.database.value === 'mongodb')) {
+      info('Creating .env file...');
+      const backendDir = join(projectName, 'backend');
+      const envPath = join(backendDir, '.env');
+      
+      // Ensure backend directory exists
+      if (!existsSync(backendDir)) {
+        mkdirSync(backendDir, { recursive: true });
+      }
+      
+      const envVar = config.database.value === 'postgresql' ? 'POSTGRES_URL' : 'MONGODB_URL';
+      const envContent = `${envVar}=${config.connectionString}\n`;
+      writeFileSync(envPath, envContent);
+      success('.env file created with database connection');
+    }
+
+    // Step 6: Update app color in styles.css
     info('Setting app color...');
     const stylesPath = join(projectName, 'src', 'assets', 'styles.css');
     if (existsSync(stylesPath)) {
@@ -358,14 +421,12 @@ async function main() {
       success(`App color set to ${config.appColor}`);
     }
 
-    // Step 6: Install dependencies (if requested)
-    if (config.installDeps) {
-      info('Installing dependencies...');
-      execSync(`cd ${projectName} && npm install`, { stdio: 'inherit' });
-      success('Dependencies installed');
-    }
+    // Step 7: Install dependencies
+    info('Installing dependencies...');
+    execSync(`cd ${projectName} && npm install`, { stdio: 'inherit' });
+    success('Dependencies installed');
 
-    // Step 7: Initialize git (if requested)
+    // Step 8: Initialize git (if requested)
     if (config.initGit) {
       info('Initializing git repository...');
       execSync(`cd ${projectName} && git init`, { stdio: 'pipe' });
@@ -380,12 +441,28 @@ async function main() {
     log(`  💬 Tagline: ${config.tagline}`);
     log(`  🎨 Color: ${config.appColor}`);
     log(`  🎯 Icon: ${config.appIcon}`);
+    log(`  🗃️  Database: ${config.database.value}`);
+    
+    // Database-specific instructions (only if connection string not provided)
+    if (config.database.value === 'postgresql' && !config.connectionString) {
+      log(`\n${colors.yellow}📝 PostgreSQL Setup:${colors.reset}`);
+      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+      log(`  ${colors.green}POSTGRES_URL=postgresql://username:password@localhost:5432/dbname${colors.reset}`);
+    } else if (config.database.value === 'mongodb' && !config.connectionString) {
+      log(`\n${colors.yellow}📝 MongoDB Setup:${colors.reset}`);
+      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+      log(`  ${colors.green}MONGODB_URL=mongodb://localhost:27017/dbname${colors.reset}`);
+    }
+
+    // Stripe setup instructions
+    log(`\n${colors.yellow}💳 Stripe Setup:${colors.reset}`);
+    log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+    log(`  ${colors.green}STRIPE_KEY=sk_test_your_stripe_secret_key_here${colors.reset}`);
+    log(`  ${colors.green}STRIPE_ENDPOINT_SECRET=whsec_your_webhook_endpoint_secret_here${colors.reset}`);
+    log(`  Get your keys from: ${colors.blue}https://dashboard.stripe.com/apikeys${colors.reset}`);
     
     log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
     log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
-    if (!config.installDeps) {
-      log(`  ${colors.cyan}npm install${colors.reset}`);
-    }
     log(`  ${colors.cyan}npm run start${colors.reset}`);
     log(`\n${colors.yellow}Happy coding! 🛹${colors.reset}\n`);
 

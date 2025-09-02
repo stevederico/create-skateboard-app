@@ -1,4 +1,11 @@
 
+1.0.3
+
+  Add database selection
+  Auto-install dependencies
+  Include Stripe setup
+  Fix config formatting
+
 1.0.2
 
   Clarify prompt labels
