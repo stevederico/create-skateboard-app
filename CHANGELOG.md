@@ -1,4 +1,8 @@
 
+1.0.7
+
+  Add Stripe guide
+
 1.0.6
 
   Update config format

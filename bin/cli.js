@@ -472,7 +472,7 @@ async function main() {
     log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
     log(`  ${colors.green}STRIPE_KEY=sk_test_your_stripe_secret_key_here${colors.reset}`);
     log(`  ${colors.green}STRIPE_ENDPOINT_SECRET=whsec_your_webhook_endpoint_secret_here${colors.reset}`);
-    log(`  Get your keys from: ${colors.blue}https://dashboard.stripe.com/apikeys${colors.reset}`);
+    log(`  Step by Step Guide: ${colors.blue}https://github.com/stevederico/skateboard#-stripe-setup${colors.reset}`);
     
     log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
     log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
