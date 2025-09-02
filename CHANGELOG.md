@@ -1,4 +1,11 @@
 
+1.0.5
+
+  Remove env setup references
+  Auto initialize git
+  Remove configuration summary
+  Update messaging
+
 1.0.4
 
   Update README documentation

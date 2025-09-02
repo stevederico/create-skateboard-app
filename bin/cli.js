@@ -250,7 +250,7 @@ async function collectProjectConfig(projectName) {
 
   // Installation preferences
   const installDeps = true; // Always install dependencies
-  const initGit = await askYesNo('Initialize git repository?', true);
+  const initGit = true; // Always initialize git repository
 
   return {
     companyName,
@@ -436,13 +436,6 @@ async function main() {
     // Success message
     log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
     
-    log(`\n${colors.cyan}Your app is configured with:${colors.reset}`);
-    log(`  📱 App: ${config.appName}`);
-    log(`  💬 Tagline: ${config.tagline}`);
-    log(`  🎨 Color: ${config.appColor}`);
-    log(`  🎯 Icon: ${config.appIcon}`);
-    log(`  🗃️  Database: ${config.database.value}`);
-    
     // Database-specific instructions (only if connection string not provided)
     if (config.database.value === 'postgresql' && !config.connectionString) {
       log(`\n${colors.yellow}📝 PostgreSQL Setup:${colors.reset}`);
@@ -463,10 +456,8 @@ async function main() {
     
     log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
     log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
-    log(`  ${colors.cyan}cp backend/.env.example backend/.env${colors.reset}`);
-    log(`  ${colors.cyan}# Edit backend/.env with your credentials${colors.reset}`);
     log(`  ${colors.cyan}npm run start${colors.reset}`);
-    log(`\n${colors.yellow}Happy coding! 🛹${colors.reset}\n`);
+    log(`\n${colors.yellow}Happy skating! 🛹${colors.reset}\n`);
 
   } catch (err) {
     error(`Failed to create project: ${err.message}`);

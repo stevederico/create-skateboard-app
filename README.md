@@ -7,8 +7,6 @@ The fastest way to create a new [Skateboard](https://github.com/stevederico/skat
 ```bash
 npx create-skateboard-app
 cd my-app
-cp backend/.env.example backend/.env
-# Edit backend/.env with your database and Stripe credentials
 npm run start
 ```
 
