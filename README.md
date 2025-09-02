@@ -34,6 +34,7 @@ npx create-skateboard-app my-app
 - 📱 Mobile responsive
 - 🛣️ React Router
 - 📦 Modern JavaScript
+- 🗃️ Database selection (SQLite, PostgreSQL, MongoDB)
 
 ## Features Included
 
@@ -45,6 +46,9 @@ npx create-skateboard-app my-app
 - Protected routes
 - Mobile tab bar
 - Customizable constants
+- Interactive setup with app customization
+- Color and icon selection
+- Database configuration
 
 ## Requirements
 
