@@ -1,4 +1,9 @@
 
+1.0.4
+
+  Update README documentation
+  Add env file setup
+
 1.0.3
 
   Add database selection

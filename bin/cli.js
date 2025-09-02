@@ -463,6 +463,8 @@ async function main() {
     
     log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
     log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
+    log(`  ${colors.cyan}cp backend/.env.example backend/.env${colors.reset}`);
+    log(`  ${colors.cyan}# Edit backend/.env with your credentials${colors.reset}`);
     log(`  ${colors.cyan}npm run start${colors.reset}`);
     log(`\n${colors.yellow}Happy coding! 🛹${colors.reset}\n`);
 
