@@ -1,4 +1,8 @@
 
+1.0.9
+
+  Add black color
+
 1.0.8
 
   Fix pages template

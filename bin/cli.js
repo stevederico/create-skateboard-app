@@ -203,7 +203,8 @@ async function collectProjectConfig(projectName) {
     { label: '🟠 Orange', value: 'orange' },
     { label: '🟡 Yellow', value: 'yellow' },
     { label: '🩷 Pink', value: 'pink' },
-    { label: '🩵 Cyan', value: 'cyan' }
+    { label: '🩵 Cyan', value: 'cyan' },
+    { label: '⚫ Black', value: 'black' }
   ];
   
   const selectedColor = await askChoice('Choose your app color:', colorChoices);
