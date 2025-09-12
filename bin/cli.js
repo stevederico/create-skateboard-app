@@ -243,10 +243,24 @@ async function collectProjectConfig(projectName) {
   const backendURL = 'https://api.example.com';
   const devBackendURL = 'http://localhost:8000';
   const companyName = 'Your Company';
-  const pages = [
+  
+  // Read pages from the downloaded template's constants.json
+  let pages = [
     { title: 'Home', url: 'home', icon: 'house' },
     { title: 'Other', url: 'other', icon: 'inbox' }
   ];
+  
+  try {
+    const templateConstantsPath = join(projectName, 'src', 'constants.json');
+    if (existsSync(templateConstantsPath)) {
+      const templateConstants = JSON.parse(readFileSync(templateConstantsPath, 'utf8'));
+      if (templateConstants.pages && Array.isArray(templateConstants.pages)) {
+        pages = templateConstants.pages;
+      }
+    }
+  } catch (err) {
+    // Use fallback pages if reading fails
+  }
 
   // Installation preferences
   const installDeps = true; // Always install dependencies

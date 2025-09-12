@@ -1,4 +1,9 @@
 
+1.0.8
+
+  Fix pages template
+  Read template constants
+
 1.0.7
 
   Add Stripe guide
