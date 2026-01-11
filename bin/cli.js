@@ -241,8 +241,8 @@ async function collectProjectConfig(projectName) {
   }
 
   // Default values for removed questions
-  const backendURL = 'https://api.example.com';
-  const devBackendURL = 'http://localhost:8000';
+  const backendURL = '/api';
+  const devBackendURL = 'http://localhost:8000/api';
   const companyName = 'Your Company';
   
   // Read pages from the downloaded template's constants.json

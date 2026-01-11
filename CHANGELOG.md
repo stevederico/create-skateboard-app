@@ -1,4 +1,7 @@
 
+1.1.0
+changed constants to include /api route
+
 1.0.9
 
   Add black color
