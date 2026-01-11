@@ -1,3 +1,5 @@
+1.1.1
+  fixed database config
 
 1.1.0
 changed constants to include /api route

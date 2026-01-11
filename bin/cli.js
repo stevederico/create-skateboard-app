@@ -384,40 +384,17 @@ async function main() {
     if (existsSync(backendConfigPath)) {
       const backendConfig = JSON.parse(readFileSync(backendConfigPath, 'utf8'));
       
-      // Handle new format with databases array
-      if (backendConfig.databases && Array.isArray(backendConfig.databases) && backendConfig.databases.length > 0) {
-        const dbConfig = backendConfig.databases[0];
-        
-        // Set database configuration
-        dbConfig.dbType = config.database.value;
-        dbConfig.db = config.appName.replace(/\s+/g, '');
-        dbConfig.origin = config.devBackendURL;
-        
+      // Update the database configuration
+      if (backendConfig.database) {
+        backendConfig.database.dbType = config.database.value;
+        backendConfig.database.db = config.appName.replace(/\s+/g, '');
+
         if (config.database.value === 'sqlite') {
-          dbConfig.connectionString = config.database.connectionString;
+          backendConfig.database.connectionString = config.database.connectionString;
         } else if (config.database.value === 'postgresql') {
-          dbConfig.connectionString = '${POSTGRES_URL}';
+          backendConfig.database.connectionString = '${POSTGRES_URL}';
         } else if (config.database.value === 'mongodb') {
-          dbConfig.connectionString = '${MONGODB_URL}';
-        }
-      } else {
-        // Fallback for old format - handle both array and single object formats defensively
-        const configArray = Array.isArray(backendConfig) ? backendConfig : [backendConfig];
-        
-        configArray.forEach(configObj => {
-          configObj.dbType = config.database.value;
-          if (config.database.value === 'sqlite') {
-            configObj.connectionString = config.database.connectionString;
-          } else if (config.database.value === 'postgresql') {
-            configObj.connectionString = '${POSTGRES_URL}';
-          } else if (config.database.value === 'mongodb') {
-            configObj.connectionString = '${MONGODB_URL}';
-          }
-        });
-        
-        // Update backendConfig reference for old format
-        if (!Array.isArray(backendConfig)) {
-          Object.assign(backendConfig, configArray[0]);
+          backendConfig.database.connectionString = '${MONGODB_URL}';
         }
       }
       
