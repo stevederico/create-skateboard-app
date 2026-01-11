@@ -402,21 +402,32 @@ async function main() {
       success(`Database configured: ${config.database.value}`);
     }
 
-    // Create .env file if connection string provided
-    if (config.connectionString && (config.database.value === 'postgresql' || config.database.value === 'mongodb')) {
-      info('Creating .env file...');
-      const backendDir = join(projectName, 'backend');
-      const envPath = join(backendDir, '.env');
-      
-      // Ensure backend directory exists
-      if (!existsSync(backendDir)) {
-        mkdirSync(backendDir, { recursive: true });
+    // Create .env file from .env.example
+    info('Creating .env file...');
+    const backendDir = join(projectName, 'backend');
+    const envExamplePath = join(backendDir, '.env.example');
+    const envPath = join(backendDir, '.env');
+
+    if (existsSync(envExamplePath)) {
+      let envContent = readFileSync(envExamplePath, 'utf8');
+
+      // Uncomment the relevant database line
+      if (config.database.value === 'mongodb') {
+        if (config.connectionString) {
+          envContent = envContent.replace(/# MONGODB_URL=.*/, `MONGODB_URL=${config.connectionString}`);
+        } else {
+          envContent = envContent.replace(/# MONGODB_URL=/, 'MONGODB_URL=');
+        }
+      } else if (config.database.value === 'postgresql') {
+        if (config.connectionString) {
+          envContent = envContent.replace(/# POSTGRES_URL=.*/, `POSTGRES_URL=${config.connectionString}`);
+        } else {
+          envContent = envContent.replace(/# POSTGRES_URL=/, 'POSTGRES_URL=');
+        }
       }
-      
-      const envVar = config.database.value === 'postgresql' ? 'POSTGRES_URL' : 'MONGODB_URL';
-      const envContent = `${envVar}=${config.connectionString}\n`;
+
       writeFileSync(envPath, envContent);
-      success('.env file created with database connection');
+      success('.env file created');
     }
 
     // Step 6: Update app color in styles.css
