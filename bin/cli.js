@@ -2,7 +2,7 @@
 
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import https from 'https';
 import { createWriteStream } from 'fs';
 import { createInterface } from 'readline';
@@ -63,16 +63,19 @@ function parseFlags(argv) {
       flags.help = true;
     } else if (arg === '--version' || arg === '-v') {
       flags.version = true;
-    } else if (arg.startsWith('--') && i + 1 < args.length && !args[i + 1].startsWith('-')) {
+    } else if (arg.startsWith('--')) {
       const key = arg.slice(2);
-      i++;
-      const val = args[i];
-      if (key === 'name') flags.name = val;
-      else if (key === 'tagline') flags.tagline = val;
-      else if (key === 'color') flags.color = val;
-      else if (key === 'icon') flags.icon = val;
-      else if (key === 'database') flags.database = val;
-      else if (key === 'connection-string') flags.connectionString = val;
+      const knownValueFlags = ['name', 'tagline', 'color', 'icon', 'database', 'connection-string'];
+      if (knownValueFlags.includes(key) && i + 1 < args.length) {
+        i++;
+        const val = args[i];
+        if (key === 'name') flags.name = val;
+        else if (key === 'tagline') flags.tagline = val;
+        else if (key === 'color') flags.color = val;
+        else if (key === 'icon') flags.icon = val;
+        else if (key === 'database') flags.database = val;
+        else if (key === 'connection-string') flags.connectionString = val;
+      }
     } else if (!arg.startsWith('-') && !flags.positional) {
       flags.positional = arg;
     }
@@ -94,6 +97,9 @@ function validateFlags(flags) {
   if (flags.database && !VALID_DATABASES.includes(flags.database)) {
     console.error(`Error: Invalid database "${flags.database}". Must be one of: ${VALID_DATABASES.join(', ')}`);
     process.exit(1);
+  }
+  if (flags.connectionString && (!flags.database || flags.database === 'sqlite')) {
+    console.error('Warning: --connection-string is ignored when database is sqlite. Use --database postgresql or --database mongodb.');
   }
 }
 
@@ -550,7 +556,7 @@ async function main() {
 
     // Success message
     if (quiet) {
-      const absolutePath = join(process.cwd(), projectName);
+      const absolutePath = resolve(projectName);
       console.log(JSON.stringify({ success: true, path: absolutePath }));
     } else {
       log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
@@ -580,7 +586,11 @@ async function main() {
     }
 
   } catch (err) {
-    error(`Failed to create project: ${err.message}`);
+    if (quiet) {
+      console.log(JSON.stringify({ success: false, error: err.message }));
+    } else {
+      error(`Failed to create project: ${err.message}`);
+    }
     process.exit(1);
   }
 }

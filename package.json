@@ -1,6 +1,6 @@
 {
   "name": "create-skateboard-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Create a full-stack React app with authentication, Stripe payments, and database support in seconds",
   "main": "index.js",
   "type": "module",

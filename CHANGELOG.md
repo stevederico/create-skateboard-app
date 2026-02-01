@@ -1,3 +1,10 @@
+1.2.1
+
+  Fix dash-prefixed flag values
+  Fix connection-string validation
+  Fix quiet-mode error output
+  Fix resolve absolute path
+
 1.2.0
 
   Add non-interactive CLI flags
