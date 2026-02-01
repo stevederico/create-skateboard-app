@@ -19,21 +19,21 @@ const colors = {
   bold: '\x1b[1m'
 };
 
-function log(message, color = 'reset') {
+let log = (message, color = 'reset') => {
   console.log(`${colors[color]}${message}${colors.reset}`);
-}
+};
 
-function error(message) {
+let error = (message) => {
   log(`❌ ${message}`, 'red');
-}
+};
 
-function success(message) {
+let success = (message) => {
   log(`✅ ${message}`, 'green');
-}
+};
 
-function info(message) {
+let info = (message) => {
   log(`ℹ️  ${message}`, 'blue');
-}
+};
 
 function checkCommand(command) {
   try {
@@ -41,6 +41,59 @@ function checkCommand(command) {
     return true;
   } catch {
     return false;
+  }
+}
+
+const VALID_COLORS = ['blue', 'green', 'purple', 'red', 'orange', 'yellow', 'pink', 'cyan', 'black'];
+const VALID_ICONS = ['command', 'house', 'zap', 'rocket', 'diamond', 'target', 'flame', 'star'];
+const VALID_DATABASES = ['sqlite', 'postgresql', 'mongodb'];
+
+function parseFlags(argv) {
+  const args = argv.slice(2);
+  const flags = { positional: null };
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === '-y' || arg === '--yes') {
+      flags.yes = true;
+    } else if (arg === '--quiet' || arg === '-q') {
+      flags.quiet = true;
+    } else if (arg === '--help' || arg === '-h') {
+      flags.help = true;
+    } else if (arg === '--version' || arg === '-v') {
+      flags.version = true;
+    } else if (arg.startsWith('--') && i + 1 < args.length && !args[i + 1].startsWith('-')) {
+      const key = arg.slice(2);
+      i++;
+      const val = args[i];
+      if (key === 'name') flags.name = val;
+      else if (key === 'tagline') flags.tagline = val;
+      else if (key === 'color') flags.color = val;
+      else if (key === 'icon') flags.icon = val;
+      else if (key === 'database') flags.database = val;
+      else if (key === 'connection-string') flags.connectionString = val;
+    } else if (!arg.startsWith('-') && !flags.positional) {
+      flags.positional = arg;
+    }
+    i++;
+  }
+
+  return flags;
+}
+
+function validateFlags(flags) {
+  if (flags.color && !VALID_COLORS.includes(flags.color)) {
+    console.error(`Error: Invalid color "${flags.color}". Must be one of: ${VALID_COLORS.join(', ')}`);
+    process.exit(1);
+  }
+  if (flags.icon && !VALID_ICONS.includes(flags.icon)) {
+    console.error(`Error: Invalid icon "${flags.icon}". Must be one of: ${VALID_ICONS.join(', ')}`);
+    process.exit(1);
+  }
+  if (flags.database && !VALID_DATABASES.includes(flags.database)) {
+    console.error(`Error: Invalid database "${flags.database}". Must be one of: ${VALID_DATABASES.join(', ')}`);
+    process.exit(1);
   }
 }
 
@@ -183,16 +236,21 @@ async function askYesNo(question, defaultYes = true) {
   return answer.toLowerCase().startsWith('y');
 }
 
-async function collectProjectConfig(projectName) {
-  log(`\n${colors.bold}Let's configure your Skateboard app!${colors.reset}\n`);
+async function collectProjectConfig(projectName, flags = {}) {
+  const nonInteractive = flags.yes;
+
+  if (!nonInteractive) {
+    log(`\n${colors.bold}Let's configure your Skateboard app!${colors.reset}\n`);
+  }
 
   // App name
-  const appName = await ask('App display name', projectName.split('-').map(word => 
+  const defaultAppName = projectName.split('-').map(word =>
     word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' '));
+  ).join(' ');
+  const appName = flags.name || (nonInteractive ? defaultAppName : await ask('App display name', defaultAppName));
 
   // Tagline
-  const tagline = await ask('App tagline', 'Try Something New');
+  const tagline = flags.tagline || (nonInteractive ? 'Try Something New' : await ask('App tagline', 'Try Something New'));
 
   // App color selection
   const colorChoices = [
@@ -206,8 +264,10 @@ async function collectProjectConfig(projectName) {
     { label: '🩵 Cyan', value: 'cyan' },
     { label: '⚫ Black', value: 'black' }
   ];
-  
-  const selectedColor = await askChoice('Choose your app color:', colorChoices);
+
+  const selectedColor = flags.color
+    ? colorChoices.find(c => c.value === flags.color)
+    : (nonInteractive ? colorChoices[0] : await askChoice('Choose your app color:', colorChoices));
 
   // App icon
   const iconChoices = [
@@ -220,8 +280,10 @@ async function collectProjectConfig(projectName) {
     { label: '🔥 Flame', value: 'flame' },
     { label: '⭐ Star', value: 'star' }
   ];
-  
-  const selectedIcon = await askChoice('Choose an app icon:', iconChoices);
+
+  const selectedIcon = flags.icon
+    ? iconChoices.find(c => c.value === flags.icon)
+    : (nonInteractive ? iconChoices[0] : await askChoice('Choose an app icon:', iconChoices));
 
   // Database selection
   const databaseChoices = [
@@ -229,15 +291,19 @@ async function collectProjectConfig(projectName) {
     { label: '🐘 PostgreSQL', value: 'postgresql', connectionString: 'postgresql://user:password@localhost:5432/dbname' },
     { label: '🍃 MongoDB', value: 'mongodb', connectionString: 'mongodb://localhost:27017/dbname' }
   ];
-  
-  const selectedDatabase = await askChoice('Choose your database:', databaseChoices, 0);
+
+  const selectedDatabase = flags.database
+    ? databaseChoices.find(c => c.value === flags.database)
+    : (nonInteractive ? databaseChoices[0] : await askChoice('Choose your database:', databaseChoices, 0));
 
   // Get connection string for non-SQLite databases
-  let connectionString = '';
-  if (selectedDatabase.value === 'postgresql') {
-    connectionString = await ask('PostgreSQL connection string (optional)', '');
-  } else if (selectedDatabase.value === 'mongodb') {
-    connectionString = await ask('MongoDB connection string (optional)', '');
+  let connectionString = flags.connectionString || '';
+  if (!connectionString && !nonInteractive) {
+    if (selectedDatabase.value === 'postgresql') {
+      connectionString = await ask('PostgreSQL connection string (optional)', '');
+    } else if (selectedDatabase.value === 'mongodb') {
+      connectionString = await ask('MongoDB connection string (optional)', '');
+    }
   }
 
   // Default values for removed questions
@@ -288,19 +354,29 @@ function showHelp() {
 ${colors.bold}🛹 Create Skateboard App${colors.reset}
 
 ${colors.cyan}Usage:${colors.reset}
-  npx create-skateboard-app
+  npx create-skateboard-app [project-name] [options]
 
 ${colors.cyan}Arguments:${colors.reset}
-  project-name    Optional project directory name (will prompt if not provided)
+  project-name              Optional project directory name (will prompt if not provided)
 
 ${colors.cyan}Options:${colors.reset}
-  --help, -h      Show this help message
-  --version, -v   Show version number
+  --help, -h                Show this help message
+  --version, -v             Show version number
+  -y, --yes                 Accept all defaults, skip prompts
+  --quiet, -q               Suppress decorative output, print JSON on success
+  --name <value>            App display name
+  --tagline <value>         App tagline
+  --color <value>           App color (${VALID_COLORS.join(', ')})
+  --icon <value>            App icon (${VALID_ICONS.join(', ')})
+  --database <value>        Database type (${VALID_DATABASES.join(', ')})
+  --connection-string <v>   Database connection string
 
 ${colors.cyan}Examples:${colors.reset}
-  npx create-skateboard-app                    # Interactive mode
-  npx create-skateboard-app my-app             # With project name
-  npx create-skateboard-app awesome-project    # With custom name
+  npx create-skateboard-app                                        # Interactive mode
+  npx create-skateboard-app my-app                                 # With project name
+  npx create-skateboard-app my-app -y                              # All defaults, no prompts
+  npx create-skateboard-app my-app --color red --icon rocket -y    # Custom values
+  npx create-skateboard-app my-app -y --quiet                      # CI/agent-friendly
 `, 'reset');
 }
 
@@ -310,25 +386,41 @@ function showVersion() {
 }
 
 async function main() {
-  // Get project name from command line
-  const args = process.argv.slice(2);
-  let projectName = args[0];
+  // Parse flags from argv
+  const flags = parseFlags(process.argv);
+  validateFlags(flags);
 
   // Handle help and version flags
-  if (args.includes('--help') || args.includes('-h')) {
+  if (flags.help) {
     showHelp();
     process.exit(0);
   }
 
-  if (args.includes('--version') || args.includes('-v')) {
+  if (flags.version) {
     showVersion();
     process.exit(0);
   }
 
-  // If no project name provided, ask for it
+  // Quiet mode: override log functions to suppress output
+  const quiet = flags.quiet;
+  if (quiet) {
+    const noop = () => {};
+    log = noop;
+    error = (msg) => console.error(msg);
+    success = noop;
+    info = noop;
+  }
+
+  let projectName = flags.positional;
+
+  // If no project name provided, ask for it or use default
   if (!projectName) {
-    log(`\n${colors.bold}🛹 Welcome to Skateboard App Creator!${colors.reset}\n`);
-    projectName = await ask('Project directory name', 'my-skateboard-app');
+    if (flags.yes) {
+      projectName = 'my-skateboard-app';
+    } else {
+      log(`\n${colors.bold}🛹 Welcome to Skateboard App Creator!${colors.reset}\n`);
+      projectName = await ask('Project directory name', 'my-skateboard-app');
+    }
   }
 
   // Validate project name
@@ -351,7 +443,7 @@ async function main() {
     await downloadTemplate(projectName);
 
     // Step 2: Collect user configuration
-    const config = await collectProjectConfig(projectName);
+    const config = await collectProjectConfig(projectName, flags);
 
     // Step 3: Update package.json
     info('Updating package.json...');
@@ -446,7 +538,7 @@ async function main() {
 
     // Step 7: Install dependencies
     info('Installing dependencies...');
-    execSync(`cd ${projectName} && npm install`, { stdio: 'inherit' });
+    execSync(`cd ${projectName} && npm install`, { stdio: quiet ? 'pipe' : 'inherit' });
     success('Dependencies installed');
 
     // Step 8: Initialize git (if requested)
@@ -457,30 +549,35 @@ async function main() {
     }
 
     // Success message
-    log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
-    
-    // Database-specific instructions (only if connection string not provided)
-    if (config.database.value === 'postgresql' && !config.connectionString) {
-      log(`\n${colors.yellow}📝 PostgreSQL Setup:${colors.reset}`);
-      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
-      log(`  ${colors.green}POSTGRES_URL=postgresql://username:password@localhost:5432/dbname${colors.reset}`);
-    } else if (config.database.value === 'mongodb' && !config.connectionString) {
-      log(`\n${colors.yellow}📝 MongoDB Setup:${colors.reset}`);
-      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
-      log(`  ${colors.green}MONGODB_URL=mongodb://localhost:27017/dbname${colors.reset}`);
-    }
+    if (quiet) {
+      const absolutePath = join(process.cwd(), projectName);
+      console.log(JSON.stringify({ success: true, path: absolutePath }));
+    } else {
+      log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
 
-    // Stripe setup instructions
-    log(`\n${colors.yellow}💳 Stripe Setup:${colors.reset}`);
-    log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
-    log(`  ${colors.green}STRIPE_KEY=sk_test_your_stripe_secret_key_here${colors.reset}`);
-    log(`  ${colors.green}STRIPE_ENDPOINT_SECRET=whsec_your_webhook_endpoint_secret_here${colors.reset}`);
-    log(`  Step by Step Guide: ${colors.blue}https://github.com/stevederico/skateboard#-stripe-setup${colors.reset}`);
-    
-    log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
-    log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
-    log(`  ${colors.cyan}npm run start${colors.reset}`);
-    log(`\n${colors.yellow}Happy skating! 🛹${colors.reset}\n`);
+      // Database-specific instructions (only if connection string not provided)
+      if (config.database.value === 'postgresql' && !config.connectionString) {
+        log(`\n${colors.yellow}📝 PostgreSQL Setup:${colors.reset}`);
+        log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+        log(`  ${colors.green}POSTGRES_URL=postgresql://username:password@localhost:5432/dbname${colors.reset}`);
+      } else if (config.database.value === 'mongodb' && !config.connectionString) {
+        log(`\n${colors.yellow}📝 MongoDB Setup:${colors.reset}`);
+        log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+        log(`  ${colors.green}MONGODB_URL=mongodb://localhost:27017/dbname${colors.reset}`);
+      }
+
+      // Stripe setup instructions
+      log(`\n${colors.yellow}💳 Stripe Setup:${colors.reset}`);
+      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+      log(`  ${colors.green}STRIPE_KEY=sk_test_your_stripe_secret_key_here${colors.reset}`);
+      log(`  ${colors.green}STRIPE_ENDPOINT_SECRET=whsec_your_webhook_endpoint_secret_here${colors.reset}`);
+      log(`  Step by Step Guide: ${colors.blue}https://github.com/stevederico/skateboard#-stripe-setup${colors.reset}`);
+
+      log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
+      log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
+      log(`  ${colors.cyan}npm run start${colors.reset}`);
+      log(`\n${colors.yellow}Happy skating! 🛹${colors.reset}\n`);
+    }
 
   } catch (err) {
     error(`Failed to create project: ${err.message}`);

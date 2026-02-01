@@ -1,3 +1,10 @@
+1.2.0
+
+  Add non-interactive CLI flags
+  Add --yes flag
+  Add --quiet flag
+  Add flag validation
+
 1.1.3
  auto uncomment for db url
 
