@@ -168,16 +168,21 @@ async function downloadTemplate(projectName) {
 
 // Interactive prompt functions
 function ask(question, defaultValue = '') {
+  // When stdin is not a TTY (piped input, CI, agents), use default value
+  if (!process.stdin.isTTY) {
+    return Promise.resolve(defaultValue);
+  }
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout
   });
 
   return new Promise((resolve) => {
-    const prompt = defaultValue 
+    const prompt = defaultValue
       ? `${colors.cyan}${question}${colors.reset} ${colors.yellow}(${defaultValue})${colors.reset}: `
       : `${colors.cyan}${question}${colors.reset}: `;
-    
+
     rl.question(prompt, (answer) => {
       rl.close();
       resolve(answer.trim() || defaultValue);
@@ -186,9 +191,14 @@ function ask(question, defaultValue = '') {
 }
 
 function askChoice(question, choices, defaultChoice = 0) {
+  // When stdin is not a TTY (piped input, CI, agents), use default choice
+  if (!process.stdin.isTTY) {
+    return choices[defaultChoice];
+  }
+
   return new Promise((resolve) => {
     let currentChoice = defaultChoice;
-    
+
     const displayMenu = () => {
       // Clear screen and show menu
       console.clear();
@@ -244,6 +254,10 @@ async function askYesNo(question, defaultYes = true) {
 
 async function collectProjectConfig(projectName, flags = {}) {
   const nonInteractive = flags.yes;
+
+  if (!nonInteractive && !process.stdin.isTTY) {
+    info('Non-interactive mode detected, using defaults. Use --flags to customize.');
+  }
 
   if (!nonInteractive) {
     log(`\n${colors.bold}Let's configure your Skateboard app!${colors.reset}\n`);

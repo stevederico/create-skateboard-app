@@ -1,3 +1,8 @@
+1.3.0
+
+  Add non-TTY fallback
+  Fix setRawMode crash
+
 1.2.1
 
   Fix dash-prefixed flag values
