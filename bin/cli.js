@@ -514,6 +514,20 @@ async function main() {
       success(`Database configured: ${config.database.value}`);
     }
 
+    // Step 5b: Inject database driver into backend deps (sqlite uses node:sqlite, no driver needed)
+    const driverMap = {
+      postgresql: { pg: '^8.20.0' },
+      mongodb: { mongodb: '^6.19.0' }
+    };
+    const driver = driverMap[config.database.value];
+    if (driver) {
+      const backendPkgPath = join(projectName, 'backend', 'package.json');
+      const backendPkg = JSON.parse(readFileSync(backendPkgPath, 'utf8'));
+      backendPkg.dependencies = { ...backendPkg.dependencies, ...driver };
+      writeFileSync(backendPkgPath, JSON.stringify(backendPkg, null, 4));
+      success(`Added ${Object.keys(driver)[0]} driver`);
+    }
+
     // Create .env file from .env.example
     info('Creating .env file...');
     const backendDir = join(projectName, 'backend');

@@ -1,3 +1,9 @@
+1.4.0
+
+  Inject database driver
+  Add pg dependency
+  Add mongodb dependency
+
 1.3.0
 
   Add non-TTY fallback
