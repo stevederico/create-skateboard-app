@@ -1,17 +1,24 @@
 {
   "name": "create-skateboard-app",
-  "version": "1.4.0",
-  "description": "Create a full-stack React app with authentication, Stripe payments, and database support in seconds",
-  "main": "index.js",
+  "version": "2.0.0",
+  "description": "Create a React + Rust SaaS app with JWT auth, Stripe, and SQLite",
+  "main": "bin/cli.js",
   "type": "module",
   "bin": {
     "create-skateboard-app": "bin/cli.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/scaffold.test.js"
   },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "keywords": [
     "react",
+    "rust",
     "boilerplate",
     "template",
     "tailwindcss",
@@ -21,10 +28,10 @@
     "starter",
     "scaffold",
     "fullstack",
-    "hono",
     "sqlite",
     "stripe",
     "authentication",
+    "jwt",
     "create-app",
     "saas"
   ],
@@ -32,7 +39,7 @@
   "license": "MIT",
   "dependencies": {},
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=24.0.0"
   },
   "repository": {
     "type": "git",
