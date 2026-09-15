@@ -107,7 +107,7 @@ test('CLI package metadata drops Hono and multi-DB claims', () => {
 test('README matches the skateboard 5.6 run story', () => {
   const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
   assert.doesNotMatch(readme, /Hono/);
-  assert.doesNotMatch(readme, /npm run server/);
+  assert.match(readme, /There is no `npm run server`/);
   assert.match(readme, /npm start/);
   assert.match(readme, /cargo run/);
   assert.match(readme, /\.env\.example/);
@@ -170,6 +170,20 @@ test('named and default -y flows scaffold skateboard 5.6', () => {
       projectName: 'my-skateboard-app',
       appName: 'My Skateboard App'
     });
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('downloads skateboard 5.6.0 from GitHub when no local repo is set', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'csa-remote-'));
+  try {
+    const env = { ...process.env };
+    delete env.SKATEBOARD_REPO;
+    delete env.SKATEBOARD_REF;
+    const result = runCli(['remote-app', '-y', '--skip-install', '--quiet'], { cwd, env });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assertScaffoldShape(join(cwd, 'remote-app'), { projectName: 'remote-app' });
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
