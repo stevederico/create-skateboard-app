@@ -1,13 +1,24 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, resolve } from 'path';
-import https from 'https';
-import { createWriteStream } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  cpSync,
+  rmSync,
+  readdirSync
+} from 'fs';
+import { join, resolve, relative, sep } from 'path';
 import { createInterface } from 'readline';
+import { fileURLToPath } from 'url';
 
-// Simple colors using ANSI codes
+// Pin to skateboard 5.6.0 so a published CLI version always scaffolds a known tree.
+// Override with SKATEBOARD_REPO (git URL or local path) and/or SKATEBOARD_REF.
+const DEFAULT_TEMPLATE_REPO = 'https://github.com/stevederico/skateboard.git';
+const DEFAULT_TEMPLATE_REF = '5.6.0';
+const UI_PACKAGE = '@stevederico/skateboard-ui';
+
 const colors = {
   green: '\x1b[32m',
   red: '\x1b[31m',
@@ -46,7 +57,6 @@ function checkCommand(command) {
 
 const VALID_COLORS = ['blue', 'green', 'purple', 'red', 'orange', 'yellow', 'pink', 'cyan', 'black'];
 const VALID_ICONS = ['command', 'house', 'zap', 'rocket', 'diamond', 'target', 'flame', 'star'];
-const VALID_DATABASES = ['sqlite', 'postgresql', 'mongodb'];
 
 function parseFlags(argv) {
   const args = argv.slice(2);
@@ -63,6 +73,10 @@ function parseFlags(argv) {
       flags.help = true;
     } else if (arg === '--version' || arg === '-v') {
       flags.version = true;
+    } else if (arg === '--skip-install') {
+      flags.skipInstall = true;
+    } else if (arg === '--install') {
+      flags.install = true;
     } else if (arg.startsWith('--')) {
       const key = arg.slice(2);
       const knownValueFlags = ['name', 'tagline', 'color', 'icon', 'database', 'connection-string'];
@@ -94,55 +108,94 @@ function validateFlags(flags) {
     console.error(`Error: Invalid icon "${flags.icon}". Must be one of: ${VALID_ICONS.join(', ')}`);
     process.exit(1);
   }
-  if (flags.database && !VALID_DATABASES.includes(flags.database)) {
-    console.error(`Error: Invalid database "${flags.database}". Must be one of: ${VALID_DATABASES.join(', ')}`);
+  if (flags.database || flags.connectionString) {
+    console.error('Error: Database selection was removed in 2.0. Skateboard uses SQLite only.');
     process.exit(1);
-  }
-  if (flags.connectionString && (!flags.database || flags.database === 'sqlite')) {
-    console.error('Warning: --connection-string is ignored when database is sqlite. Use --database postgresql or --database mongodb.');
   }
 }
 
-async function downloadTemplate(projectName) {
-  // Try multiple methods in order of preference
+function templateRef() {
+  return process.env.SKATEBOARD_REF || DEFAULT_TEMPLATE_REF;
+}
+
+function templateRepo() {
+  return process.env.SKATEBOARD_REPO || DEFAULT_TEMPLATE_REPO;
+}
+
+function isRemoteRepo(repo) {
+  return /^(https?:\/\/|git@|git:\/\/)/.test(repo);
+}
+
+function copyTemplateTree(src, dest) {
+  const filter = (source) => {
+    if (source === src) return true;
+    const parts = relative(src, source).split(sep);
+    return !parts.includes('.git') && !parts.includes('node_modules');
+  };
+
+  try {
+    cpSync(src, dest, { recursive: true, verbatimSymlinks: true, filter });
+  } catch (err) {
+    if (err?.code === 'ERR_INVALID_ARG_VALUE' || /verbatimSymlinks/.test(err?.message || '')) {
+      cpSync(src, dest, { recursive: true, filter });
+      return;
+    }
+    throw err;
+  }
+}
+
+function downloadTemplate(projectName) {
+  const repo = templateRepo();
+  const ref = templateRef();
+
+  if (!isRemoteRepo(repo)) {
+    if (!existsSync(repo)) {
+      throw new Error(`Template path not found: ${repo}`);
+    }
+    info(`Copying template from ${repo}...`);
+    copyTemplateTree(repo, projectName);
+    success('Template copied successfully');
+    return;
+  }
+
   const methods = [
     {
       name: 'git clone',
       check: () => checkCommand('git'),
       execute: () => {
-        execSync(`git clone --depth 1 --single-branch https://github.com/stevederico/skateboard.git ${projectName}`, { 
-          stdio: 'pipe',
-          timeout: 15000
-        });
-        // Remove .git directory to avoid including git history
-        execSync(`rm -rf ${projectName}/.git`, { stdio: 'pipe' });
+        execSync(
+          `git clone --depth 1 --branch ${JSON.stringify(ref)} ${JSON.stringify(repo)} ${JSON.stringify(projectName)}`,
+          { stdio: 'pipe', timeout: 60000 }
+        );
+        rmSync(join(projectName, '.git'), { recursive: true, force: true });
       }
     },
     {
       name: 'curl + tar',
       check: () => checkCommand('curl') && checkCommand('tar'),
       execute: () => {
-        // Download and extract in one step, avoiding the skateboard-master folder issue
-        execSync(`curl -L https://github.com/stevederico/skateboard/archive/refs/heads/master.tar.gz | tar -xz`, { 
+        const archiveUrl = `https://github.com/stevederico/skateboard/archive/refs/tags/${encodeURIComponent(ref)}.tar.gz`;
+        execSync(`curl -L ${JSON.stringify(archiveUrl)} | tar -xz`, {
           stdio: 'pipe',
-          timeout: 15000
+          timeout: 60000
         });
-        // Move contents from skateboard-master to the project directory
-        execSync(`mv skateboard-master ${projectName}`, { stdio: 'pipe' });
+        const extracted = findExtractedArchive(ref);
+        execSync(`mv ${JSON.stringify(extracted)} ${JSON.stringify(projectName)}`, { stdio: 'pipe' });
       }
     },
     {
       name: 'curl + unzip',
       check: () => checkCommand('curl') && checkCommand('unzip'),
       execute: () => {
-        execSync(`curl -L https://github.com/stevederico/skateboard/archive/refs/heads/master.zip -o temp.zip`, { 
+        const zipUrl = `https://github.com/stevederico/skateboard/archive/refs/tags/${encodeURIComponent(ref)}.zip`;
+        execSync(`curl -L ${JSON.stringify(zipUrl)} -o temp-skateboard.zip`, {
           stdio: 'pipe',
-          timeout: 15000
+          timeout: 60000
         });
-        execSync(`unzip -q temp.zip`, { stdio: 'pipe' });
-        // Move the extracted skateboard-master folder to the project name
-        execSync(`mv skateboard-master ${projectName}`, { stdio: 'pipe' });
-        execSync(`rm temp.zip`, { stdio: 'pipe' });
+        execSync('unzip -q temp-skateboard.zip', { stdio: 'pipe' });
+        rmSync('temp-skateboard.zip', { force: true });
+        const extracted = findExtractedArchive(ref);
+        execSync(`mv ${JSON.stringify(extracted)} ${JSON.stringify(projectName)}`, { stdio: 'pipe' });
       }
     }
   ];
@@ -152,23 +205,33 @@ async function downloadTemplate(projectName) {
       log(`${method.name} not available, skipping...`, 'yellow');
       continue;
     }
-    
+
     try {
-      info(`Downloading template with ${method.name}...`);
+      info(`Downloading skateboard ${ref} with ${method.name}...`);
       method.execute();
-      success(`Template downloaded successfully`);
+      success('Template downloaded successfully');
       return;
-    } catch (err) {
+    } catch {
       log(`${method.name} failed, trying next method...`, 'yellow');
+      rmSync(projectName, { recursive: true, force: true });
+      rmSync('temp-skateboard.zip', { force: true });
     }
   }
 
-  throw new Error('All download methods failed. Please ensure you have git or curl available and check your internet connection.');
+  throw new Error(
+    `Failed to download skateboard ${ref}. Ensure git or curl is available and check your internet connection.`
+  );
 }
 
-// Interactive prompt functions
+function findExtractedArchive(ref) {
+  const expected = `skateboard-${ref}`;
+  if (existsSync(expected)) return expected;
+  const match = readdirSync('.').find((name) => name.startsWith('skateboard-') && existsSync(join(name, 'package.json')));
+  if (match) return match;
+  throw new Error(`Could not find extracted skateboard archive for ref ${ref}`);
+}
+
 function ask(question, defaultValue = '') {
-  // When stdin is not a TTY (piped input, CI, agents), use default value
   if (!process.stdin.isTTY) {
     return Promise.resolve(defaultValue);
   }
@@ -178,29 +241,27 @@ function ask(question, defaultValue = '') {
     output: process.stdout
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolveAnswer) => {
     const prompt = defaultValue
       ? `${colors.cyan}${question}${colors.reset} ${colors.yellow}(${defaultValue})${colors.reset}: `
       : `${colors.cyan}${question}${colors.reset}: `;
 
     rl.question(prompt, (answer) => {
       rl.close();
-      resolve(answer.trim() || defaultValue);
+      resolveAnswer(answer.trim() || defaultValue);
     });
   });
 }
 
 function askChoice(question, choices, defaultChoice = 0) {
-  // When stdin is not a TTY (piped input, CI, agents), use default choice
   if (!process.stdin.isTTY) {
     return choices[defaultChoice];
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolveChoice) => {
     let currentChoice = defaultChoice;
 
     const displayMenu = () => {
-      // Clear screen and show menu
       console.clear();
       log(`\n${colors.cyan}${question}${colors.reset}\n`);
       choices.forEach((choice, index) => {
@@ -214,29 +275,28 @@ function askChoice(question, choices, defaultChoice = 0) {
 
     displayMenu();
 
-    // Enable raw mode to capture arrow keys
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
     const handleKeypress = (key) => {
       switch (key) {
-        case '\u001b[A': // Up arrow
+        case '\u001b[A':
           currentChoice = currentChoice > 0 ? currentChoice - 1 : choices.length - 1;
           displayMenu();
           break;
-        case '\u001b[B': // Down arrow
+        case '\u001b[B':
           currentChoice = currentChoice < choices.length - 1 ? currentChoice + 1 : 0;
           displayMenu();
           break;
-        case '\r': // Enter
+        case '\r':
         case '\n':
           process.stdin.setRawMode(false);
           process.stdin.pause();
           process.stdin.removeListener('data', handleKeypress);
-          resolve(choices[currentChoice]);
+          resolveChoice(choices[currentChoice]);
           break;
-        case '\u0003': // Ctrl+C
+        case '\u0003':
           process.exit(0);
           break;
       }
@@ -244,12 +304,6 @@ function askChoice(question, choices, defaultChoice = 0) {
 
     process.stdin.on('data', handleKeypress);
   });
-}
-
-async function askYesNo(question, defaultYes = true) {
-  const defaultText = defaultYes ? 'Y/n' : 'y/N';
-  const answer = await ask(`${question} (${defaultText})`, defaultYes ? 'y' : 'n');
-  return answer.toLowerCase().startsWith('y');
 }
 
 async function collectProjectConfig(projectName, flags = {}) {
@@ -263,16 +317,12 @@ async function collectProjectConfig(projectName, flags = {}) {
     log(`\n${colors.bold}Let's configure your Skateboard app!${colors.reset}\n`);
   }
 
-  // App name
-  const defaultAppName = projectName.split('-').map(word =>
+  const defaultAppName = projectName.split('-').map((word) =>
     word.charAt(0).toUpperCase() + word.slice(1)
   ).join(' ');
   const appName = flags.name || (nonInteractive ? defaultAppName : await ask('App display name', defaultAppName));
-
-  // Tagline
   const tagline = flags.tagline || (nonInteractive ? 'Try Something New' : await ask('App tagline', 'Try Something New'));
 
-  // App color selection
   const colorChoices = [
     { label: '🔵 Blue', value: 'blue' },
     { label: '💚 Green', value: 'green' },
@@ -286,10 +336,9 @@ async function collectProjectConfig(projectName, flags = {}) {
   ];
 
   const selectedColor = flags.color
-    ? colorChoices.find(c => c.value === flags.color)
+    ? colorChoices.find((c) => c.value === flags.color)
     : (nonInteractive ? colorChoices[0] : await askChoice('Choose your app color:', colorChoices));
 
-  // App icon
   const iconChoices = [
     { label: '⌘ Command', value: 'command' },
     { label: '🏠 House', value: 'house' },
@@ -302,41 +351,13 @@ async function collectProjectConfig(projectName, flags = {}) {
   ];
 
   const selectedIcon = flags.icon
-    ? iconChoices.find(c => c.value === flags.icon)
+    ? iconChoices.find((c) => c.value === flags.icon)
     : (nonInteractive ? iconChoices[0] : await askChoice('Choose an app icon:', iconChoices));
 
-  // Database selection
-  const databaseChoices = [
-    { label: '🗃️  SQLite (default)', value: 'sqlite', connectionString: `./databases/${appName.replace(/\s+/g, '')}.db` },
-    { label: '🐘 PostgreSQL', value: 'postgresql', connectionString: 'postgresql://user:password@localhost:5432/dbname' },
-    { label: '🍃 MongoDB', value: 'mongodb', connectionString: 'mongodb://localhost:27017/dbname' }
-  ];
-
-  const selectedDatabase = flags.database
-    ? databaseChoices.find(c => c.value === flags.database)
-    : (nonInteractive ? databaseChoices[0] : await askChoice('Choose your database:', databaseChoices, 0));
-
-  // Get connection string for non-SQLite databases
-  let connectionString = flags.connectionString || '';
-  if (!connectionString && !nonInteractive) {
-    if (selectedDatabase.value === 'postgresql') {
-      connectionString = await ask('PostgreSQL connection string (optional)', '');
-    } else if (selectedDatabase.value === 'mongodb') {
-      connectionString = await ask('MongoDB connection string (optional)', '');
-    }
-  }
-
-  // Default values for removed questions
-  const backendURL = '/api';
-  const devBackendURL = 'http://localhost:8000/api';
-  const companyName = 'Your Company';
-  
-  // Read pages from the downloaded template's constants.json
   let pages = [
-    { title: 'Home', url: 'home', icon: 'house' },
-    { title: 'Other', url: 'other', icon: 'inbox' }
+    { title: 'Dashboard', url: 'home', icon: 'layout-dashboard' }
   ];
-  
+
   try {
     const templateConstantsPath = join(projectName, 'src', 'constants.json');
     if (existsSync(templateConstantsPath)) {
@@ -345,33 +366,87 @@ async function collectProjectConfig(projectName, flags = {}) {
         pages = templateConstants.pages;
       }
     }
-  } catch (err) {
+  } catch {
     // Use fallback pages if reading fails
   }
 
-  // Installation preferences
-  const installDeps = true; // Always install dependencies
-  const initGit = true; // Always initialize git repository
-
   return {
-    companyName,
+    companyName: 'Your Company',
     appName,
     tagline,
     appColor: selectedColor.value,
     appIcon: selectedIcon.value,
-    database: selectedDatabase,
-    connectionString,
-    backendURL,
-    devBackendURL,
+    backendURL: '/api',
+    devBackendURL: 'http://localhost:8000/api',
     pages,
-    installDeps,
-    initGit
+    installDeps: flags.skipInstall ? false : true,
+    initGit: true
   };
+}
+
+function writeJson(path, data, spaces) {
+  writeFileSync(path, `${JSON.stringify(data, null, spaces)}\n`);
+}
+
+function applyBranding(projectName, config) {
+  const packageJsonPath = join(projectName, 'package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  packageJson.name = projectName;
+  packageJson.version = '0.1.0';
+  writeJson(packageJsonPath, packageJson, 2);
+  success('Package.json updated');
+
+  const constantsPath = join(projectName, 'src', 'constants.json');
+  if (existsSync(constantsPath)) {
+    const constants = JSON.parse(readFileSync(constantsPath, 'utf8'));
+    constants.companyName = config.companyName;
+    constants.appName = config.appName;
+    constants.tagline = config.tagline;
+    constants.appIcon = config.appIcon;
+    constants.backendURL = config.backendURL;
+    constants.devBackendURL = config.devBackendURL;
+    constants.pages = config.pages;
+    writeJson(constantsPath, constants, 4);
+    success('App configuration updated');
+  }
+
+  const backendConfigPath = join(projectName, 'backend', 'config.json');
+  if (existsSync(backendConfigPath)) {
+    const backendConfig = JSON.parse(readFileSync(backendConfigPath, 'utf8'));
+    const dbName = config.appName.replace(/\s+/g, '') || 'MyApp';
+    backendConfig.database = {
+      db: dbName,
+      dbType: 'sqlite',
+      connectionString: `./databases/${dbName}.db`
+    };
+    writeJson(backendConfigPath, backendConfig, 2);
+    success('Database configured: sqlite');
+  }
+
+  const envExamplePath = join(projectName, 'backend', '.env.example');
+  const envPath = join(projectName, 'backend', '.env');
+  if (existsSync(envExamplePath) && !existsSync(envPath)) {
+    writeFileSync(envPath, readFileSync(envExamplePath, 'utf8'));
+    success('.env file created from .env.example');
+  }
+
+  const stylesPath = join(projectName, 'src', 'assets', 'styles.css');
+  if (existsSync(stylesPath)) {
+    let stylesContent = readFileSync(stylesPath, 'utf8');
+    stylesContent = stylesContent.replace(
+      /--color-app:\s*var\(--color-[^)]+\);/,
+      `--color-app: var(--color-${config.appColor}-500);`
+    );
+    writeFileSync(stylesPath, stylesContent);
+    success(`App color set to ${config.appColor}`);
+  }
 }
 
 function showHelp() {
   log(`
 ${colors.bold}🛹 Create Skateboard App${colors.reset}
+
+Scaffolds a React + Rust + SQLite SaaS app from skateboard ${DEFAULT_TEMPLATE_REF}.
 
 ${colors.cyan}Usage:${colors.reset}
   npx create-skateboard-app [project-name] [options]
@@ -388,8 +463,8 @@ ${colors.cyan}Options:${colors.reset}
   --tagline <value>         App tagline
   --color <value>           App color (${VALID_COLORS.join(', ')})
   --icon <value>            App icon (${VALID_ICONS.join(', ')})
-  --database <value>        Database type (${VALID_DATABASES.join(', ')})
-  --connection-string <v>   Database connection string
+  --skip-install            Skip npm install (CI / smoke tests)
+  --install                 Install frontend dependencies (default)
 
 ${colors.cyan}Examples:${colors.reset}
   npx create-skateboard-app                                        # Interactive mode
@@ -397,6 +472,15 @@ ${colors.cyan}Examples:${colors.reset}
   npx create-skateboard-app my-app -y                              # All defaults, no prompts
   npx create-skateboard-app my-app --color red --icon rocket -y    # Custom values
   npx create-skateboard-app my-app -y --quiet                      # CI/agent-friendly
+
+${colors.cyan}After scaffolding:${colors.reset}
+  cd my-app
+  npm install
+  npm start                 # frontend  http://localhost:5173
+  cd backend && cargo run   # backend   http://localhost:8000
+
+Frontend is Vite. Backend is Rust. There is no npm run server.
+Database is SQLite only.
 `, 'reset');
 }
 
@@ -405,12 +489,30 @@ function showVersion() {
   log(`v${packageJson.version}`, 'green');
 }
 
+function assertScaffoldShape(projectName) {
+  const packageJson = JSON.parse(readFileSync(join(projectName, 'package.json'), 'utf8'));
+  if (packageJson.dependencies?.[UI_PACKAGE] !== '5.1.0') {
+    throw new Error(`Expected ${UI_PACKAGE} to be pinned to 5.1.0`);
+  }
+  const engines = packageJson.engines?.node || '';
+  if (!engines.includes('24')) {
+    throw new Error(`Expected engines.node to require Node 24+, got ${engines}`);
+  }
+  if (!existsSync(join(projectName, 'backend', 'Cargo.toml'))) {
+    throw new Error('Expected backend/Cargo.toml (Rust backend)');
+  }
+  if (!existsSync(join(projectName, 'src', 'legal.json'))) {
+    throw new Error('Expected src/legal.json');
+  }
+  if (existsSync(join(projectName, 'backend', 'package.json'))) {
+    throw new Error('Unexpected backend/package.json — skateboard 5.6 is Rust, not Node/Hono');
+  }
+}
+
 async function main() {
-  // Parse flags from argv
   const flags = parseFlags(process.argv);
   validateFlags(flags);
 
-  // Handle help and version flags
   if (flags.help) {
     showHelp();
     process.exit(0);
@@ -421,7 +523,6 @@ async function main() {
     process.exit(0);
   }
 
-  // Quiet mode: override log functions to suppress output
   const quiet = flags.quiet;
   if (quiet) {
     const noop = () => {};
@@ -433,7 +534,6 @@ async function main() {
 
   let projectName = flags.positional;
 
-  // If no project name provided, ask for it or use default
   if (!projectName) {
     if (flags.yes) {
       projectName = 'my-skateboard-app';
@@ -443,13 +543,11 @@ async function main() {
     }
   }
 
-  // Validate project name
   if (!/^[a-zA-Z0-9-_]+$/.test(projectName)) {
     error('Project name can only contain letters, numbers, hyphens, and underscores');
     process.exit(1);
   }
 
-  // Check if directory already exists
   if (existsSync(projectName)) {
     error(`Directory '${projectName}' already exists`);
     process.exit(1);
@@ -458,161 +556,47 @@ async function main() {
   try {
     log(`\n${colors.bold}🛹 Creating Skateboard app: ${projectName}${colors.reset}\n`);
 
-    // Step 1: Download the template with fallback methods
-    info('Downloading template...');
-    await downloadTemplate(projectName);
+    info(`Fetching skateboard ${templateRef()}...`);
+    downloadTemplate(projectName);
 
-    // Step 2: Collect user configuration
     const config = await collectProjectConfig(projectName, flags);
 
-    // Step 3: Update package.json
-    info('Updating package.json...');
-    const packageJsonPath = join(projectName, 'package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-    packageJson.name = projectName;
-    packageJson.version = '0.1.0';
-    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-    success('Package.json updated');
+    info('Applying project branding...');
+    applyBranding(projectName, config);
+    assertScaffoldShape(projectName);
 
-    // Step 4: Update constants.json with user configuration
-    info('Configuring app settings...');
-    const constantsPath = join(projectName, 'src', 'constants.json');
-    if (existsSync(constantsPath)) {
-      const constants = JSON.parse(readFileSync(constantsPath, 'utf8'));
-      constants.companyName = config.companyName;
-      constants.appName = config.appName;
-      constants.tagline = config.tagline;
-      constants.appIcon = config.appIcon;
-      constants.backendURL = config.backendURL;
-      constants.devBackendURL = config.devBackendURL;
-      constants.pages = config.pages;
-      writeFileSync(constantsPath, JSON.stringify(constants, null, 4));
-      success('App configuration updated');
+    if (config.installDeps) {
+      info('Installing dependencies...');
+      execSync(`cd ${JSON.stringify(projectName)} && npm install`, { stdio: quiet ? 'pipe' : 'inherit' });
+      success('Dependencies installed');
     }
 
-    // Step 5: Configure database settings
-    info('Configuring database...');
-    const backendConfigPath = join(projectName, 'backend', 'config.json');
-    if (existsSync(backendConfigPath)) {
-      const backendConfig = JSON.parse(readFileSync(backendConfigPath, 'utf8'));
-      
-      // Update the database configuration
-      if (backendConfig.database) {
-        backendConfig.database.dbType = config.database.value;
-        backendConfig.database.db = config.appName.replace(/\s+/g, '');
-
-        if (config.database.value === 'sqlite') {
-          backendConfig.database.connectionString = config.database.connectionString;
-        } else if (config.database.value === 'postgresql') {
-          backendConfig.database.connectionString = '${POSTGRES_URL}';
-        } else if (config.database.value === 'mongodb') {
-          backendConfig.database.connectionString = '${MONGODB_URL}';
-        }
-      }
-      
-      writeFileSync(backendConfigPath, JSON.stringify(backendConfig, null, 2));
-      success(`Database configured: ${config.database.value}`);
-    }
-
-    // Step 5b: Inject database driver into backend deps (sqlite uses node:sqlite, no driver needed)
-    const driverMap = {
-      postgresql: { pg: '^8.20.0' },
-      mongodb: { mongodb: '^6.19.0' }
-    };
-    const driver = driverMap[config.database.value];
-    if (driver) {
-      const backendPkgPath = join(projectName, 'backend', 'package.json');
-      const backendPkg = JSON.parse(readFileSync(backendPkgPath, 'utf8'));
-      backendPkg.dependencies = { ...backendPkg.dependencies, ...driver };
-      writeFileSync(backendPkgPath, JSON.stringify(backendPkg, null, 4));
-      success(`Added ${Object.keys(driver)[0]} driver`);
-    }
-
-    // Create .env file from .env.example
-    info('Creating .env file...');
-    const backendDir = join(projectName, 'backend');
-    const envExamplePath = join(backendDir, '.env.example');
-    const envPath = join(backendDir, '.env');
-
-    if (existsSync(envExamplePath)) {
-      let envContent = readFileSync(envExamplePath, 'utf8');
-
-      // Uncomment the relevant database line
-      if (config.database.value === 'mongodb') {
-        if (config.connectionString) {
-          envContent = envContent.replace(/# MONGODB_URL=.*/, `MONGODB_URL=${config.connectionString}`);
-        } else {
-          envContent = envContent.replace(/# MONGODB_URL=/, 'MONGODB_URL=');
-        }
-      } else if (config.database.value === 'postgresql') {
-        if (config.connectionString) {
-          envContent = envContent.replace(/# POSTGRES_URL=.*/, `POSTGRES_URL=${config.connectionString}`);
-        } else {
-          envContent = envContent.replace(/# POSTGRES_URL=/, 'POSTGRES_URL=');
-        }
-      }
-
-      writeFileSync(envPath, envContent);
-      success('.env file created');
-    }
-
-    // Step 6: Update app color in styles.css
-    info('Setting app color...');
-    const stylesPath = join(projectName, 'src', 'assets', 'styles.css');
-    if (existsSync(stylesPath)) {
-      let stylesContent = readFileSync(stylesPath, 'utf8');
-      // Replace the app color in the @theme block
-      stylesContent = stylesContent.replace(
-        /--color-app:\s*var\(--color-[^)]+\);/,
-        `--color-app: var(--color-${config.appColor}-500);`
-      );
-      writeFileSync(stylesPath, stylesContent);
-      success(`App color set to ${config.appColor}`);
-    }
-
-    // Step 7: Install dependencies
-    info('Installing dependencies...');
-    execSync(`cd ${projectName} && npm install`, { stdio: quiet ? 'pipe' : 'inherit' });
-    success('Dependencies installed');
-
-    // Step 8: Initialize git (if requested)
-    if (config.initGit) {
+    if (config.initGit && checkCommand('git')) {
       info('Initializing git repository...');
-      execSync(`cd ${projectName} && git init`, { stdio: 'pipe' });
+      execSync(`cd ${JSON.stringify(projectName)} && git init`, { stdio: 'pipe' });
       success('Git repository initialized');
     }
 
-    // Success message
     if (quiet) {
-      const absolutePath = resolve(projectName);
-      console.log(JSON.stringify({ success: true, path: absolutePath }));
+      console.log(JSON.stringify({ success: true, path: resolve(projectName) }));
     } else {
       log(`\n${colors.bold}${colors.green}🎉 Success! Created ${config.appName}${colors.reset}\n`);
 
-      // Database-specific instructions (only if connection string not provided)
-      if (config.database.value === 'postgresql' && !config.connectionString) {
-        log(`\n${colors.yellow}📝 PostgreSQL Setup:${colors.reset}`);
-        log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
-        log(`  ${colors.green}POSTGRES_URL=postgresql://username:password@localhost:5432/dbname${colors.reset}`);
-      } else if (config.database.value === 'mongodb' && !config.connectionString) {
-        log(`\n${colors.yellow}📝 MongoDB Setup:${colors.reset}`);
-        log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
-        log(`  ${colors.green}MONGODB_URL=mongodb://localhost:27017/dbname${colors.reset}`);
-      }
-
-      // Stripe setup instructions
       log(`\n${colors.yellow}💳 Stripe Setup:${colors.reset}`);
-      log(`  Update the ${colors.cyan}backend/.env${colors.reset} file with:`);
+      log(`  Copy ${colors.cyan}backend/.env.example${colors.reset} to ${colors.cyan}backend/.env${colors.reset} and set:`);
+      log(`  ${colors.green}JWT_SECRET=your-secret-key${colors.reset}`);
       log(`  ${colors.green}STRIPE_KEY=sk_test_your_stripe_secret_key_here${colors.reset}`);
       log(`  ${colors.green}STRIPE_ENDPOINT_SECRET=whsec_your_webhook_endpoint_secret_here${colors.reset}`);
       log(`  Step by Step Guide: ${colors.blue}https://github.com/stevederico/skateboard#-stripe-setup${colors.reset}`);
 
       log(`\n${colors.bold}Get started with:${colors.reset}`, 'yellow');
       log(`\n  ${colors.cyan}cd ${projectName}${colors.reset}`);
-      log(`  ${colors.cyan}npm run start${colors.reset}`);
-      log(`\n${colors.yellow}Happy skating! 🛹${colors.reset}\n`);
+      log(`  ${colors.cyan}npm install${colors.reset}`);
+      log(`  ${colors.cyan}npm start${colors.reset}                 ${colors.yellow}# frontend  http://localhost:5173${colors.reset}`);
+      log(`  ${colors.cyan}cd backend && cargo run${colors.reset}   ${colors.yellow}# backend   http://localhost:8000${colors.reset}`);
+      log(`\n${colors.yellow}Frontend is Vite. Backend is Rust. There is no npm run server.${colors.reset}`);
+      log(`${colors.yellow}Happy skating! 🛹${colors.reset}\n`);
     }
-
   } catch (err) {
     if (quiet) {
       console.log(JSON.stringify({ success: false, error: err.message }));
@@ -623,4 +607,19 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+export {
+  parseFlags,
+  validateFlags,
+  applyBranding,
+  DEFAULT_TEMPLATE_REF,
+  DEFAULT_TEMPLATE_REPO
+};
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

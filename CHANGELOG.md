@@ -1,3 +1,12 @@
+2.0.0
+
+  Scaffold skateboard 5.6.0 (React + Rust + SQLite)
+  Drop Hono backend and PostgreSQL/MongoDB selection
+  Pin @stevederico/skateboard-ui to 5.1.0 via upstream template
+  Require Node.js 24+
+  Document npm start + cargo run (no npm run server)
+  Add scaffold smoke test
+
 1.4.0
 
   Inject database driver
