@@ -13,11 +13,12 @@ import { join, resolve, relative, sep } from 'path';
 import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
 
-// Pin to skateboard 5.6.0 so a published CLI version always scaffolds a known tree.
+// Pin to skateboard 5.10.0 so a published CLI version always scaffolds a known tree.
 // Override with SKATEBOARD_REPO (git URL or local path) and/or SKATEBOARD_REF.
 const DEFAULT_TEMPLATE_REPO = 'https://github.com/stevederico/skateboard.git';
-const DEFAULT_TEMPLATE_REF = '5.6.0';
+const DEFAULT_TEMPLATE_REF = '5.10.0';
 const UI_PACKAGE = '@stevederico/skateboard-ui';
+const UI_VERSION = '5.4.0';
 
 const colors = {
   green: '\x1b[32m',
@@ -491,8 +492,8 @@ function showVersion() {
 
 function assertScaffoldShape(projectName) {
   const packageJson = JSON.parse(readFileSync(join(projectName, 'package.json'), 'utf8'));
-  if (packageJson.dependencies?.[UI_PACKAGE] !== '5.1.0') {
-    throw new Error(`Expected ${UI_PACKAGE} to be pinned to 5.1.0`);
+  if (packageJson.dependencies?.[UI_PACKAGE] !== UI_VERSION) {
+    throw new Error(`Expected ${UI_PACKAGE} to be pinned to ${UI_VERSION}`);
   }
   const engines = packageJson.engines?.node || '';
   if (!engines.includes('24')) {
@@ -505,7 +506,7 @@ function assertScaffoldShape(projectName) {
     throw new Error('Expected src/legal.json');
   }
   if (existsSync(join(projectName, 'backend', 'package.json'))) {
-    throw new Error('Unexpected backend/package.json — skateboard 5.6 is Rust, not Node/Hono');
+    throw new Error('Unexpected backend/package.json — skateboard 5.x is Rust, not Node/Hono');
   }
 }
 

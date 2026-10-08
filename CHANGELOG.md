@@ -1,3 +1,8 @@
+2.1.0
+
+  Scaffold skateboard 5.10.0
+  Pin skateboard-ui 5.4.0
+
 2.0.0
 
   Scaffold skateboard 5.6.0 (React + Rust + SQLite)

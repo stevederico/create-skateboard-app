@@ -14,8 +14,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(ROOT, 'bin', 'cli.js');
-const TEMPLATE_REF = '5.6.0';
+const TEMPLATE_REF = '5.10.0';
 const UI_PACKAGE = '@stevederico/skateboard-ui';
+const UI_VERSION = '5.4.0';
 
 function readCliPackage() {
   return JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -51,8 +52,8 @@ function assertScaffoldShape(appDir, { projectName, appName, appColor } = {}) {
   assert.ok(existsSync(pkgPath), 'generated package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
 
-  assert.equal(pkg.dependencies?.[UI_PACKAGE], '5.1.0', `${UI_PACKAGE} must be pinned to 5.1.0`);
-  assert.equal(pkg.skateboardVersion, TEMPLATE_REF, 'skateboardVersion must stay 5.6.0');
+  assert.equal(pkg.dependencies?.[UI_PACKAGE], UI_VERSION, `${UI_PACKAGE} must be pinned to ${UI_VERSION}`);
+  assert.equal(pkg.skateboardVersion, TEMPLATE_REF, `skateboardVersion must stay ${TEMPLATE_REF}`);
   assert.match(pkg.engines?.node || '', /24/, 'engines.node must require Node 24+');
   if (projectName) {
     assert.equal(pkg.name, projectName);
@@ -93,7 +94,7 @@ function assertScaffoldShape(appDir, { projectName, appName, appColor } = {}) {
 
 test('CLI package metadata drops Hono and multi-DB claims', () => {
   const pkg = readCliPackage();
-  assert.equal(pkg.version, '2.0.0');
+  assert.equal(pkg.version, '2.1.0');
   assert.match(pkg.engines.node, /24/);
   assert.equal(pkg.keywords.includes('hono'), false);
   assert.equal(pkg.keywords.includes('postgresql'), false);
@@ -104,7 +105,7 @@ test('CLI package metadata drops Hono and multi-DB claims', () => {
   assert.match(pkg.description, /rust/i);
 });
 
-test('README matches the skateboard 5.6 run story', () => {
+test('README matches the skateboard 5.10 run story', () => {
   const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
   assert.doesNotMatch(readme, /Hono/);
   assert.match(readme, /There is no `npm run server`/);
@@ -131,7 +132,7 @@ test('--help describes Rust + SQLite and named/interactive flows', () => {
 test('--version prints the package version', () => {
   const result = runCli(['--version']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /v2\.0\.0/);
+  assert.match(result.stdout, /v2\.1\.0/);
 });
 
 test('rejects leftover --database flags', () => {
@@ -140,7 +141,7 @@ test('rejects leftover --database flags', () => {
   assert.match(`${result.stdout}\n${result.stderr}`, /SQLite only/);
 });
 
-test('named and default -y flows scaffold skateboard 5.6', () => {
+test('named and default -y flows scaffold skateboard 5.10', () => {
   const template = ensureLocalTemplate();
   const cwd = mkdtempSync(join(tmpdir(), 'csa-smoke-'));
 
@@ -175,7 +176,7 @@ test('named and default -y flows scaffold skateboard 5.6', () => {
   }
 });
 
-test('downloads skateboard 5.6.0 from GitHub when no local repo is set', () => {
+test('downloads skateboard 5.10.0 from GitHub when no local repo is set', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'csa-remote-'));
   try {
     const env = { ...process.env };
@@ -189,7 +190,7 @@ test('downloads skateboard 5.6.0 from GitHub when no local repo is set', () => {
   }
 });
 
-test('scaffold fails closed if the template is not skateboard 5.6', () => {
+test('scaffold fails closed if the template is not skateboard 5.10', () => {
   const fake = mkdtempSync(join(tmpdir(), 'csa-fake-'));
   writeFileSync(join(fake, 'package.json'), JSON.stringify({
     name: 'not-skateboard',
@@ -207,7 +208,7 @@ test('scaffold fails closed if the template is not skateboard 5.6', () => {
     assert.notEqual(result.status, 0);
     const payload = JSON.parse(result.stdout.trim().split('\n').at(-1));
     assert.equal(payload.success, false);
-    assert.match(payload.error, /5\.1\.0|Node 24|Cargo.toml/);
+    assert.match(payload.error, /5\.4\.0|Node 24|Cargo.toml/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
     rmSync(fake, { recursive: true, force: true });
