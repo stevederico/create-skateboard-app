@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -94,7 +95,7 @@ function assertScaffoldShape(appDir, { projectName, appName, appColor } = {}) {
 
 test('CLI package metadata drops Hono and multi-DB claims', () => {
   const pkg = readCliPackage();
-  assert.equal(pkg.version, '2.1.0');
+  assert.equal(pkg.version, '2.1.1');
   assert.match(pkg.engines.node, /24/);
   assert.equal(pkg.keywords.includes('hono'), false);
   assert.equal(pkg.keywords.includes('postgresql'), false);
@@ -132,7 +133,20 @@ test('--help describes Rust + SQLite and named/interactive flows', () => {
 test('--version prints the package version', () => {
   const result = runCli(['--version']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /v2\.1\.0/);
+  assert.match(result.stdout, /v2\.1\.1/);
+});
+
+test('runs through a symlinked bin, the way npx calls it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'csa-bin-'));
+  try {
+    const link = join(dir, 'create-skateboard-app');
+    symlinkSync(CLI, link);
+    const result = spawnSync(process.execPath, [link, '--version'], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /v2\.1\.1/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('rejects leftover --database flags', () => {

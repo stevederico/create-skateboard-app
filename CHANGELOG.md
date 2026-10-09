@@ -1,3 +1,8 @@
+2.1.1
+
+  Fix npx silent exit
+  Add symlink bin test
+
 2.1.0
 
   Scaffold skateboard 5.10.0

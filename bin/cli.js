@@ -7,7 +7,8 @@ import {
   existsSync,
   cpSync,
   rmSync,
-  readdirSync
+  readdirSync,
+  realpathSync
 } from 'fs';
 import { join, resolve, relative, sep } from 'path';
 import { createInterface } from 'readline';
@@ -608,7 +609,15 @@ async function main() {
   }
 }
 
-const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// npx runs the bin through a node_modules/.bin symlink, so compare real paths.
+function isDirectRun() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
 
 export {
   parseFlags,
@@ -618,7 +627,7 @@ export {
   DEFAULT_TEMPLATE_REPO
 };
 
-if (isDirectRun) {
+if (isDirectRun()) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);
