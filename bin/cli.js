@@ -14,8 +14,6 @@ import { join, resolve, relative, sep } from 'path';
 import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
 
-// Pin to skateboard 5.10.0 so a published CLI version always scaffolds a known tree.
-// Override with SKATEBOARD_REPO (git URL or local path) and/or SKATEBOARD_REF.
 const DEFAULT_TEMPLATE_REPO = 'https://github.com/stevederico/skateboard.git';
 const DEFAULT_TEMPLATE_REF = '5.10.0';
 const UI_PACKAGE = '@stevederico/skateboard-ui';
@@ -369,7 +367,6 @@ async function collectProjectConfig(projectName, flags = {}) {
       }
     }
   } catch {
-    // Use fallback pages if reading fails
   }
 
   return {

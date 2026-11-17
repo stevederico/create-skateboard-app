@@ -1,3 +1,7 @@
+2.2.0
+
+  Remove code comments
+
 2.1.1
 
   Fix npx silent exit
