@@ -1,3 +1,9 @@
+2.3.0
+
+  Test template pin
+  Test env overrides
+  Extract pages fallback
+
 2.2.0
 
   Remove code comments

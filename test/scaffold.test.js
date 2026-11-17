@@ -95,7 +95,7 @@ function assertScaffoldShape(appDir, { projectName, appName, appColor } = {}) {
 
 test('CLI package metadata drops Hono and multi-DB claims', () => {
   const pkg = readCliPackage();
-  assert.equal(pkg.version, '2.2.0');
+  assert.equal(pkg.version, '2.3.0');
   assert.match(pkg.engines.node, /24/);
   assert.equal(pkg.keywords.includes('hono'), false);
   assert.equal(pkg.keywords.includes('postgresql'), false);
@@ -133,7 +133,7 @@ test('--help describes Rust + SQLite and named/interactive flows', () => {
 test('--version prints the package version', () => {
   const result = runCli(['--version']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /v2\.2\.0/);
+  assert.match(result.stdout, /v2\.3\.0/);
 });
 
 test('runs through a symlinked bin, the way npx calls it', () => {
@@ -143,7 +143,7 @@ test('runs through a symlinked bin, the way npx calls it', () => {
     symlinkSync(CLI, link);
     const result = spawnSync(process.execPath, [link, '--version'], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /v2\.2\.0/);
+    assert.match(result.stdout, /v2\.3\.0/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

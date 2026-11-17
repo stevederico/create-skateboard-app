@@ -306,6 +306,22 @@ function askChoice(question, choices, defaultChoice = 0) {
   });
 }
 
+function readTemplatePagesOrDefault(projectDir) {
+  try {
+    const templateConstantsPath = join(projectDir, 'src', 'constants.json');
+    if (existsSync(templateConstantsPath)) {
+      const templateConstants = JSON.parse(readFileSync(templateConstantsPath, 'utf8'));
+      if (templateConstants.pages && Array.isArray(templateConstants.pages)) {
+        return templateConstants.pages;
+      }
+    }
+  } catch {
+  }
+  return [
+    { title: 'Dashboard', url: 'home', icon: 'layout-dashboard' }
+  ];
+}
+
 async function collectProjectConfig(projectName, flags = {}) {
   const nonInteractive = flags.yes;
 
@@ -354,20 +370,7 @@ async function collectProjectConfig(projectName, flags = {}) {
     ? iconChoices.find((c) => c.value === flags.icon)
     : (nonInteractive ? iconChoices[0] : await askChoice('Choose an app icon:', iconChoices));
 
-  let pages = [
-    { title: 'Dashboard', url: 'home', icon: 'layout-dashboard' }
-  ];
-
-  try {
-    const templateConstantsPath = join(projectName, 'src', 'constants.json');
-    if (existsSync(templateConstantsPath)) {
-      const templateConstants = JSON.parse(readFileSync(templateConstantsPath, 'utf8'));
-      if (templateConstants.pages && Array.isArray(templateConstants.pages)) {
-        pages = templateConstants.pages;
-      }
-    }
-  } catch {
-  }
+  const pages = readTemplatePagesOrDefault(projectName);
 
   return {
     companyName: 'Your Company',
@@ -620,6 +623,9 @@ export {
   parseFlags,
   validateFlags,
   applyBranding,
+  readTemplatePagesOrDefault,
+  templateRef,
+  templateRepo,
   DEFAULT_TEMPLATE_REF,
   DEFAULT_TEMPLATE_REPO
 };

@@ -1,6 +1,6 @@
 {
   "name": "create-skateboard-app",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Create a React + Rust SaaS app with JWT auth, Stripe, and SQLite",
   "main": "bin/cli.js",
   "type": "module",
@@ -8,7 +8,7 @@
     "create-skateboard-app": "bin/cli.js"
   },
   "scripts": {
-    "test": "node --test test/scaffold.test.js"
+    "test": "node --test test/scaffold.test.js test/template.test.js"
   },
   "files": [
     "bin",
